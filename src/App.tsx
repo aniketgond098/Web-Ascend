@@ -52,7 +52,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#05070f] text-slate-100 flex flex-col selection:bg-[#ff334b] selection:text-white font-sans antialiased overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#05070A] text-slate-300 flex flex-col selection:bg-red-600 selection:text-white font-sans antialiased overflow-x-hidden">
       {/* Dynamic Cybernetic Spider Web Geometry Background */}
       <WebBackground />
 
@@ -80,6 +80,12 @@ const MainLayout: React.FC = () => {
               </motion.div>
             </AnimatePresence>
           </main>
+
+          {/* Sleek Interface Footer */}
+          <footer className="h-12 border-t border-blue-900/10 px-4 sm:px-8 flex items-center justify-between text-[10px] text-slate-600 font-mono uppercase tracking-widest bg-[#06080F] shrink-0 mt-auto">
+            <span>Protocol initialized // ready for input</span>
+            <span>&copy; WEB ASCEND // ASCENSION PROTOCOL v2.4</span>
+          </footer>
         </div>
       </div>
 

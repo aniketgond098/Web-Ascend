@@ -5,14 +5,25 @@ import {
   Flame,
   Award,
   ArrowRight,
+  Sparkles,
+  Zap,
+  Target,
+  CheckSquare,
   TrendingUp,
+  AlertTriangle,
+  Radio,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
 import { HabitModal } from '../modals/HabitModal';
 import { formatReadableDate } from '../../utils/date';
-import { getRankProgress, RANK_CONFIG, RANK_ORDER } from '../../config/progression';
-import { Mission, Habit, RankTier } from '../../types';
+import { getRankProgress, RANK_CONFIG, RANK_ORDER, getLevelProgress } from '../../config/progression';
+import { Mission, Habit } from '../../types';
+import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
+import { WebStreakVisualizer } from '../ui/WebStreakVisualizer';
+import { SpiderIcon } from '../ui/SpiderIcon';
 
 export const TodayView: React.FC = () => {
   const {
@@ -30,6 +41,7 @@ export const TodayView: React.FC = () => {
 
   const [isMissionModalOpen, setIsMissionModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [activeWebConnectionId, setActiveWebConnectionId] = useState<string | null>(null);
 
   const todayRecord = dailyRecords[todayDate] || {
     date: todayDate,
@@ -51,157 +63,375 @@ export const TodayView: React.FC = () => {
     todayRecord.completedMissionIds.filter((id) => activeMissions.some((m) => m.id === id)).length +
     todayRecord.completedHabitIds.filter((id) => activeHabits.some((h) => h.id === id)).length;
 
-  const rankProgress = getRankProgress(profile.consistencyDaysCompleted);
+  const unresolvedCount = totalObjectives - completedObjectives;
+  const progressPercent = totalObjectives > 0 ? Math.round((completedObjectives / totalObjectives) * 100) : 0;
+
+  const rankProgress = getRankProgress(profile.totalSuccessfulDays ?? profile.consistencyDaysCompleted ?? 0);
   const rankOrder = RANK_ORDER;
   const currentRankIndex = rankOrder.indexOf(profile.rank);
+  const { level, currentLevelXP, nextLevelXP, progressPercent: xpPercent } = getLevelProgress(profile.totalXP);
 
-  // 7-day mini activity pulse calculation
-  const last7Days = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const dateStr = d.toISOString().split('T')[0];
-    const rec = dailyRecords[dateStr];
-    const isToday = dateStr === todayDate;
-    const isDone = rec ? (rec.isPerfectDay || rec.completedMissionIds.length > 0) : false;
-    const isPartial = rec && rec.completedMissionIds.length > 0 && !rec.isPerfectDay;
-    return { dateStr, isToday, isDone, isPartial };
-  });
+  // Time-aware greeting
+  const currentHour = new Date().getHours();
+  const timeGreeting =
+    currentHour < 12 ? 'GOOD MORNING' : currentHour < 18 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
+
+  // Handle mission toggle with web connection animation
+  const handleMissionClick = (missionId: string) => {
+    const isCurrentlyDone = todayRecord.completedMissionIds.includes(missionId);
+    if (!isCurrentlyDone) {
+      setActiveWebConnectionId(missionId);
+      setTimeout(() => setActiveWebConnectionId(null), 1200);
+    }
+    toggleMissionCompletion(missionId);
+  };
+
+  // Potential rewards still available today
+  const potentialXP =
+    activeMissions
+      .filter((m) => !todayRecord.completedMissionIds.includes(m.id))
+      .reduce((sum, m) => sum + m.xpReward, 0) +
+    activeHabits
+      .filter((h) => !todayRecord.completedHabitIds.includes(h.id))
+      .reduce((sum, h) => sum + h.xpReward, 0);
+
+  const potentialCoins =
+    activeMissions
+      .filter((m) => !todayRecord.completedMissionIds.includes(m.id))
+      .reduce((sum, m) => sum + m.essenceReward, 0) +
+    activeHabits
+      .filter((h) => !todayRecord.completedHabitIds.includes(h.id))
+      .reduce((sum, h) => sum + h.essenceReward, 0);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-16 lg:pb-8 font-sans">
-      {/* 1. MAIN SLEEK 12-COLUMN SECTION */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* LEFT COLUMN: MISSIONS & HABITS (7 cols) */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          {/* Header */}
-          <div className="flex justify-between items-end border-b border-blue-900/20 pb-3">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-white tracking-wide font-['Chakra_Petch']">
-                TODAY'S MISSIONS
-              </h2>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950/50 text-blue-400 border border-blue-900/30">
-                {todayRecord.completedMissionIds.length}/{activeMissions.length}
+    <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8 font-sans relative">
+      {/* Dynamic Animated Web Filament Overlay when completing mission */}
+      {activeWebConnectionId && (
+        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-red-600/5 backdrop-blur-[1px] animate-pulse" />
+          <div className="relative flex flex-col items-center">
+            <SpiderIcon size={54} color="#EF4444" glow={true} className="animate-bounce" />
+            <span className="text-xs font-mono font-bold text-red-400 mt-2 px-3 py-1 rounded-full bg-[#0A0E17] border border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+              MISSION COMPLETE // WEB CONNECTION STABILIZED
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 1. COMMAND CENTER HEADER: SYSTEM ONLINE & TELEMETRY CLUSTER */}
+      <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0D1322] via-[#0A0E17] to-[#140D18] border border-blue-900/30 backdrop-blur-md relative overflow-hidden shadow-2xl">
+        {/* Subtle geometric web watermark in header */}
+        <div className="absolute -right-8 -top-8 w-60 h-60 opacity-[0.06] pointer-events-none">
+          <svg viewBox="0 0 100 100" className="stroke-white fill-none">
+            <circle cx="50" cy="50" r="10" />
+            <circle cx="50" cy="50" r="22" strokeDasharray="3 2" />
+            <circle cx="50" cy="50" r="34" />
+            <circle cx="50" cy="50" r="46" strokeDasharray="1 3" />
+            <line x1="50" y1="4" x2="50" y2="96" />
+            <line x1="4" y1="50" x2="96" y2="50" />
+            <line x1="17" y1="17" x2="83" y2="83" />
+            <line x1="83" y1="17" x2="17" y2="83" />
+          </svg>
+        </div>
+
+        {/* Top telemetry bar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse shadow-[0_0_8px_#60a5fa]" />
+              <span className="text-blue-400 font-bold uppercase tracking-widest">SYSTEM ONLINE</span>
+              <span className="text-slate-600">//</span>
+              <span className="text-red-400 font-bold tracking-wider uppercase">WEB HUB COMMAND</span>
+              <span className="text-slate-600">//</span>
+              <span className="text-slate-400">{formatReadableDate(todayDate)}</span>
+            </div>
+
+            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-wide font-['Chakra_Petch'] uppercase mt-1">
+              {timeGreeting}, <span className="text-red-500">{profile.username}</span>
+            </h1>
+
+            <p className="text-xs text-slate-400 font-mono flex flex-wrap items-center gap-2 pt-1">
+              <span className="px-2 py-0.5 rounded bg-blue-950/60 border border-blue-900/40 text-blue-300 font-bold">
+                LEVEL {level}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-red-950/60 border border-red-900/40 text-red-300 font-bold">
+                RANK {profile.rank} ({RANK_CONFIG[profile.rank].codename})
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-300">
+                Next Rank in <strong className="text-red-400">{rankProgress.daysRemaining} days</strong>
+              </span>
+            </p>
+          </div>
+
+          {/* Quick HUD Metrics Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-mono">
+            {/* Spidey Coins */}
+            <div
+              onClick={() => setActiveTab('REWARDS')}
+              className="p-3 rounded-xl bg-[#0F141F] border border-amber-500/30 hover:border-amber-400/60 cursor-pointer transition-all shadow-[0_0_15px_rgba(245,158,11,0.08)]"
+            >
+              <div className="flex items-center gap-1.5 text-[10px] text-amber-300/80 uppercase font-semibold">
+                <SpideyCoinIcon size={14} glow={false} />
+                <span>SPIDEY COINS</span>
+              </div>
+              <div className="text-lg font-bold text-white font-['Chakra_Petch'] mt-0.5">
+                {profile.currentEssence.toLocaleString()}
+              </div>
+            </div>
+
+            {/* Web Streak */}
+            <div
+              onClick={() => setActiveTab('TRACKING')}
+              className="p-3 rounded-xl bg-[#0F141F] border border-red-900/40 hover:border-red-500/50 cursor-pointer transition-all shadow-[0_0_15px_rgba(239,68,68,0.08)]"
+            >
+              <div className="flex items-center gap-1 text-[10px] text-red-400 uppercase font-semibold">
+                <Flame className="w-3.5 h-3.5 fill-red-500/30" />
+                <span>WEB STREAK</span>
+              </div>
+              <div className="text-lg font-bold text-white font-['Chakra_Petch'] mt-0.5">
+                {profile.currentStreak} <span className="text-xs text-red-400 font-normal">DAYS</span>
+              </div>
+            </div>
+
+            {/* Daily Objectives Output */}
+            <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-[#0F141F] border border-blue-900/40">
+              <div className="flex items-center gap-1 text-[10px] text-blue-400 uppercase font-semibold">
+                <Radio className="w-3.5 h-3.5" />
+                <span>OBJECTIVES</span>
+              </div>
+              <div className="text-lg font-bold text-white font-['Chakra_Petch'] mt-0.5">
+                {completedObjectives} / {totalObjectives}{' '}
+                <span className="text-xs text-blue-400 font-normal">({progressPercent}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Level XP Progress Bar inside Header */}
+        <div className="mt-5 pt-4 border-t border-blue-900/20 grid grid-cols-1 md:grid-cols-2 gap-4 items-center text-xs font-mono">
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px]">
+              <span className="text-slate-400 uppercase">Evolution XP To Level {level + 1}</span>
+              <span className="text-blue-300 font-bold">
+                {currentLevelXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP
               </span>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsMissionModalOpen(true)}
-                className="text-xs font-mono text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> ADD
-              </button>
-              <button
-                onClick={() => setActiveTab('MISSIONS')}
-                className="text-xs font-mono text-blue-400 opacity-70 hover:opacity-100 underline cursor-pointer"
-              >
-                VIEW ALL
-              </button>
+            <div className="w-full h-2 bg-slate-900 border border-blue-900/30 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shadow-[0_0_10px_#38bdf8] transition-all duration-500 rounded-full"
+                style={{ width: `${xpPercent}%` }}
+              />
             </div>
           </div>
 
-          {/* Missions List */}
-          <div className="space-y-3">
-            {activeMissions.length === 0 ? (
-              <div className="bg-slate-900/40 border border-blue-900/20 p-8 rounded-lg text-center space-y-3">
-                <p className="text-xs font-mono text-slate-500 uppercase tracking-wider">
-                  No active directives scheduled for today.
-                </p>
+          {/* Potential Yield Callout */}
+          <div className="flex items-center justify-between sm:justify-end gap-4 text-[11px] text-slate-400">
+            <span>UNCLAIMED TODAY:</span>
+            <span className="text-blue-400 font-bold">+{potentialXP} XP</span>
+            <span className="text-slate-700">|</span>
+            <span className="text-amber-300 font-bold flex items-center gap-1">
+              +{potentialCoins} SPIDEY COINS
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. SPIDER-SENSE NOTIFICATION BANNER */}
+      {unresolvedCount > 0 ? (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-red-950/40 via-[#0A0E17] to-amber-950/20 border border-red-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono shadow-[0_0_20px_rgba(239,68,68,0.12)]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500 flex items-center justify-center text-red-400 shrink-0 animate-pulse">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-red-400 font-bold uppercase tracking-wider font-['Chakra_Petch'] block sm:inline mr-2">
+                ⚠ SPIDER-SENSE DETECTED:
+              </span>
+              <span className="text-slate-300">
+                {unresolvedCount} {unresolvedCount === 1 ? 'objective remains' : 'objectives remain'} unresolved. Complete them before the daily cycle ends to safeguard your Web Streak.
+              </span>
+            </div>
+          </div>
+          <span className="text-red-400 font-bold uppercase text-[10px] px-2.5 py-1 rounded bg-red-950/60 border border-red-800/50 self-start sm:self-auto shrink-0">
+            STREAK AT RISK
+          </span>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-[#0A0E17] to-blue-950/30 border border-emerald-500/40 flex items-center justify-between text-xs font-mono shadow-[0_0_20px_rgba(16,185,129,0.12)]">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="text-slate-200">
+              <strong className="text-emerald-400 font-['Chakra_Petch'] uppercase tracking-wider">
+                ✓ ALL DIRECTIVES SECURED:
+              </strong>{' '}
+              Web link fully stabilized for today. Daily consistency and ascension progress verified.
+            </span>
+          </div>
+          <span className="text-emerald-400 font-bold uppercase text-[10px] px-2.5 py-1 rounded bg-emerald-950/60 border border-emerald-800/50 shrink-0">
+            100% STABILIZED
+          </span>
+        </div>
+      )}
+
+      {/* 3. MAIN COMMAND GRID (12 Cols) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* LEFT COLUMN: MISSIONS & DAILY PROTOCOLS (7 cols) */}
+        <div className="lg:col-span-7 flex flex-col gap-6">
+          {/* MISSIONS SECTION */}
+          <div>
+            <div className="flex justify-between items-end border-b border-blue-900/20 pb-3 mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-white tracking-wide font-['Chakra_Petch'] flex items-center gap-2">
+                  <Target className="w-5 h-5 text-red-500" />
+                  TODAY'S MISSIONS
+                </h2>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950/50 text-blue-400 border border-blue-900/30">
+                  {todayRecord.completedMissionIds.length}/{activeMissions.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => setIsMissionModalOpen(true)}
-                  className="px-4 py-2 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 font-mono text-xs hover:bg-blue-600/30 transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-['Chakra_Petch'] text-xs font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(239,68,68,0.25)] transition-all cursor-pointer active:scale-95"
                 >
-                  + INITIALIZE MISSION
+                  <Plus className="w-3.5 h-3.5" /> NEW MISSION
+                </button>
+                <button
+                  onClick={() => setActiveTab('MISSIONS')}
+                  className="text-xs font-mono text-blue-400 opacity-80 hover:opacity-100 hover:underline cursor-pointer"
+                >
+                  VIEW ALL &rarr;
                 </button>
               </div>
-            ) : (
-              activeMissions.map((mission) => {
-                const isCompleted = todayRecord.completedMissionIds.includes(mission.id);
-                return (
-                  <div
-                    key={mission.id}
-                    onClick={() => toggleMissionCompletion(mission.id)}
-                    className={`
-                      p-4 rounded-lg flex items-center justify-between group transition-all duration-200 cursor-pointer select-none
-                      ${
-                        isCompleted
-                          ? 'bg-slate-900/40 border border-blue-900/20 hover:border-blue-500/50'
-                          : 'bg-[#0F141F] border-2 border-blue-600/30 shadow-[0_0_15px_rgba(37,99,235,0.1)] hover:border-blue-500/60'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      {/* Checkbox */}
-                      <div
-                        className={`
-                          w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all
-                          ${
-                            isCompleted
-                              ? 'border border-blue-500 bg-blue-500/10'
-                              : 'border border-slate-600 group-hover:border-blue-400'
-                          }
-                        `}
-                      >
-                        {isCompleted && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-sm opacity-100 shadow-[0_0_6px_#3b82f6]" />
-                        )}
-                      </div>
+            </div>
 
-                      {/* Content */}
-                      <div className="min-w-0">
-                        <p
-                          className={`text-sm font-medium transition-all truncate ${
-                            isCompleted ? 'text-slate-400 line-through opacity-60' : 'text-white'
-                          }`}
+            {/* Missions List */}
+            <div className="space-y-3">
+              {activeMissions.length === 0 ? (
+                <div className="bg-[#0A0E17] border border-blue-900/20 p-8 rounded-xl text-center space-y-3">
+                  <p className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+                    No active mission directives assigned for today.
+                  </p>
+                  <button
+                    onClick={() => setIsMissionModalOpen(true)}
+                    className="px-4 py-2 rounded-lg bg-red-600/20 border border-red-500/40 text-red-300 font-mono text-xs hover:bg-red-600/30 transition-all cursor-pointer"
+                  >
+                    + INITIALIZE MISSION DIRECTIVE
+                  </button>
+                </div>
+              ) : (
+                activeMissions.map((mission) => {
+                  const isCompleted = todayRecord.completedMissionIds.includes(mission.id);
+                  return (
+                    <div
+                      key={mission.id}
+                      onClick={() => handleMissionClick(mission.id)}
+                      className={`
+                        p-4 rounded-xl flex items-center justify-between group transition-all duration-200 cursor-pointer select-none border relative overflow-hidden
+                        ${
+                          isCompleted
+                            ? 'bg-slate-900/25 border-blue-900/20 hover:border-blue-500/40 opacity-75'
+                            : 'bg-[#0F141F] border-blue-900/40 shadow-[0_0_15px_rgba(37,99,235,0.06)] hover:border-blue-500/60'
+                        }
+                      `}
+                    >
+                      {/* Web Thread Flash on completion */}
+                      {activeWebConnectionId === mission.id && (
+                        <div className="absolute inset-0 bg-red-500/20 animate-pulse pointer-events-none" />
+                      )}
+
+                      <div className="flex items-center gap-4 min-w-0">
+                        {/* Checkbox */}
+                        <div
+                          className={`
+                            w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all
+                            ${
+                              isCompleted
+                                ? 'border border-blue-500 bg-blue-500/20'
+                                : 'border border-slate-600 group-hover:border-blue-400'
+                            }
+                          `}
                         >
-                          {mission.title}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="text-[9px] bg-blue-900/30 text-blue-300 border border-blue-900/40 px-1.5 py-0.5 rounded uppercase tracking-widest font-mono">
-                            +{mission.xpReward} XP
-                          </span>
-                          <span className="text-[9px] bg-red-900/30 text-red-300 border border-red-900/40 px-1.5 py-0.5 rounded uppercase tracking-widest font-mono">
-                            +{mission.essenceReward} ESSENCE
-                          </span>
-                          {mission.isRequired && (
-                            <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase font-mono">
-                              REQ
-                            </span>
+                          {isCompleted && (
+                            <div className="w-2.5 h-2.5 bg-blue-500 rounded-sm shadow-[0_0_8px_#3b82f6]" />
                           )}
                         </div>
+
+                        {/* Mission Content */}
+                        <div className="min-w-0">
+                          <p
+                            className={`text-sm font-semibold transition-all truncate ${
+                              isCompleted ? 'text-slate-400 line-through opacity-70' : 'text-white'
+                            }`}
+                          >
+                            {mission.title}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 font-mono">
+                            <span className="text-[10px] bg-blue-900/30 text-blue-300 border border-blue-900/40 px-1.5 py-0.5 rounded uppercase font-bold">
+                              +{mission.xpReward} XP
+                            </span>
+                            <span className="text-[10px] bg-amber-950/40 text-amber-300 border border-amber-900/40 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1">
+                              +{mission.essenceReward} COINS
+                            </span>
+                            {mission.priority === 'HIGH' && (
+                              <span className="text-[9px] bg-red-950/60 text-red-400 border border-red-800/40 px-1.5 py-0.5 rounded uppercase font-bold">
+                                HIGH PRIORITY
+                              </span>
+                            )}
+                            {mission.isRequired && (
+                              <span className="text-[9px] bg-amber-950/50 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded uppercase font-bold">
+                                REQUIRED CORE
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                        {isCompleted ? (
+                          <span className="text-emerald-400 font-bold tracking-wider flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> COMPLETE
+                          </span>
+                        ) : (
+                          <span className="text-blue-400 font-bold tracking-wider group-hover:text-blue-300">
+                            UNRESOLVED
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0 font-mono text-[10px]">
-                      {isCompleted ? (
-                        <span className="text-slate-500">COMPLETE</span>
-                      ) : (
-                        <span className="text-blue-400 font-bold tracking-wider">ACTIVE</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          {/* DAILY HABITS SECTION */}
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xs font-bold text-slate-500 tracking-widest uppercase font-mono">
-                DAILY HABITS
-              </h3>
+          {/* DAILY PROTOCOLS (HABITS) SECTION */}
+          <div>
+            <div className="flex justify-between items-center mb-4 border-b border-blue-900/20 pb-2">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold text-white tracking-wider uppercase font-['Chakra_Petch']">
+                  DAILY PROTOCOLS
+                </h3>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950/50 text-blue-400 border border-blue-900/30">
+                  {todayRecord.completedHabitIds.length}/{activeHabits.length}
+                </span>
+              </div>
               <button
                 onClick={() => setIsHabitModalOpen(true)}
-                className="text-[11px] font-mono text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                className="text-xs font-mono text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
               >
-                <Plus className="w-3 h-3" /> ADD HABIT
+                <Plus className="w-3 h-3" /> ADD PROTOCOL
               </button>
             </div>
 
             {activeHabits.length === 0 ? (
-              <div className="bg-slate-900/20 border border-slate-800 p-4 rounded-md text-center">
-                <span className="text-xs text-slate-500 font-mono">No daily habits active.</span>
+              <div className="bg-[#0A0E17] border border-blue-900/20 p-5 rounded-xl text-center">
+                <span className="text-xs text-slate-500 font-mono">
+                  No daily protocols active. Anchor your daily habits to stabilize your web.
+                </span>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -212,106 +442,71 @@ export const TodayView: React.FC = () => {
                       key={habit.id}
                       onClick={() => toggleHabitCompletion(habit.id)}
                       className={`
-                        p-3 rounded-md flex justify-between items-center cursor-pointer transition-all select-none
+                        p-3.5 rounded-xl flex justify-between items-center cursor-pointer transition-all select-none border
                         ${
                           isCompleted
-                            ? 'bg-slate-900/20 border border-slate-800 opacity-60'
-                            : 'bg-[#0F141F] border border-blue-900/40 hover:border-blue-500/50'
+                            ? 'bg-slate-900/20 border-slate-800 opacity-65'
+                            : 'bg-[#0F141F] border-blue-900/30 hover:border-blue-500/50 shadow-sm'
                         }
                       `}
                     >
-                      <span
-                        className={`text-xs truncate mr-2 ${
-                          isCompleted ? 'text-slate-400 line-through' : 'text-white font-medium'
-                        }`}
-                      >
-                        {habit.name}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold shrink-0">
-                        {isCompleted ? (
-                          <span className="text-blue-400">✓</span>
-                        ) : (
-                          <span className="text-slate-500">○</span>
-                        )}
-                      </span>
+                      <div className="min-w-0 mr-2">
+                        <span
+                          className={`text-xs block truncate ${
+                            isCompleted ? 'text-slate-400 line-through' : 'text-white font-semibold'
+                          }`}
+                        >
+                          {habit.name}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          <Flame className="w-3 h-3 text-red-500 fill-red-500/30" />
+                          <span>{habit.currentStreak} day streak</span>
+                        </span>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-2 font-mono">
+                        <span className="text-[10px] text-blue-400">+{habit.xpReward} XP</span>
+                        <div
+                          className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                            isCompleted
+                              ? 'bg-blue-500/20 border border-blue-500 text-blue-400'
+                              : 'border border-slate-700 text-transparent'
+                          }`}
+                        >
+                          {isCompleted ? '✓' : ''}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             )}
           </div>
-
-          {/* Perfect Day Banner */}
-          {todayRecord.isPerfectDay && (
-            <div className="p-4 rounded-lg bg-red-950/20 border border-red-900/40 flex items-center justify-between text-xs font-mono text-slate-300">
-              <div className="flex items-center gap-3">
-                <Award className="w-5 h-5 text-red-500 animate-pulse shrink-0" />
-                <span>
-                  <strong className="text-white">PERFECT DAY PROTOCOL ACHIEVED:</strong> +100 XP & +100 Essence secured today!
-                </span>
-              </div>
-              <span className="text-red-400 font-bold">100%</span>
-            </div>
-          )}
         </div>
 
-        {/* RIGHT COLUMN: ACTIVITY PULSE & ASCENSION PATH (5 cols) */}
+        {/* RIGHT COLUMN: WEB STREAK NETWORK & ASCENSION PATH (5 cols) */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* 1. Activity Pulse Card */}
-          <div className="bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-900/30 p-6 rounded-2xl relative overflow-hidden">
-            {/* Geometric Spider Web Vector Graphic */}
-            <div className="absolute -right-4 -top-4 w-32 h-32 opacity-10 pointer-events-none">
-              <svg viewBox="0 0 100 100" className="stroke-white fill-none">
-                <circle cx="50" cy="50" r="10" />
-                <circle cx="50" cy="50" r="20" strokeDasharray="4 2" />
-                <circle cx="50" cy="50" r="30" />
-                <circle cx="50" cy="50" r="40" strokeDasharray="1 4" />
-                <line x1="50" y1="10" x2="50" y2="90" />
-                <line x1="10" y1="50" x2="90" y2="50" />
-                <line x1="21.7" y1="21.7" x2="78.3" y2="78.3" />
-                <line x1="21.7" y1="78.3" x2="78.3" y2="21.7" />
-              </svg>
-            </div>
+          {/* 1. WEB STREAK NETWORK VISUALIZER */}
+          <WebStreakVisualizer
+            streak={profile.currentStreak}
+            longestStreak={profile.longestStreak}
+            showDetails={true}
+          />
 
-            <p className="text-xs text-blue-300 font-mono tracking-tighter uppercase">Activity Pulse</p>
-            <p className="text-4xl font-bold text-white mt-1 font-['Chakra_Petch']">
-              {profile.currentStreak}
-            </p>
-            <p className="text-[10px] text-blue-400 uppercase tracking-widest font-mono">Day Streak</p>
-
-            {/* 7-Day Histogram Grid */}
-            <div className="mt-6 grid grid-cols-7 gap-1.5 items-end">
-              {last7Days.map((d, i) => (
-                <div key={d.dateStr} className="flex flex-col items-center gap-1">
-                  <div
-                    className={`w-full h-8 rounded-sm transition-all ${
-                      d.isDone
-                        ? 'bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                        : d.isPartial
-                        ? 'bg-blue-500/40'
-                        : d.isToday
-                        ? 'border border-blue-500/50 bg-blue-950/30'
-                        : 'border border-blue-900/30 border-dashed bg-slate-900/30'
-                    }`}
-                  />
-                  <span className="text-[9px] font-mono text-slate-500">
-                    {i === 6 ? 'TODAY' : ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 2. Ascension Path Card */}
-          <div className="bg-slate-900/30 border border-slate-800 p-6 rounded-2xl flex-1 flex flex-col justify-between">
+          {/* 2. ASCENSION PROGRESSION CARD */}
+          <div className="bg-[#0A0E17] border border-blue-900/30 p-6 rounded-2xl flex-1 flex flex-col justify-between shadow-lg relative overflow-hidden">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-['Chakra_Petch']">
-                  ASCENSION PATH
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-['Chakra_Petch'] flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-red-500" />
+                  ASCENSION HIERARCHY
                 </h3>
-                <span className="text-[10px] text-red-500 font-bold font-mono">
-                  {profile.rank} &rarr; {rankProgress.nextRank || 'MAX'}
-                </span>
+                <button
+                  onClick={() => setActiveTab('ASCEND')}
+                  className="text-[11px] text-red-500 hover:text-red-400 font-bold font-mono flex items-center gap-1 cursor-pointer"
+                >
+                  {profile.rank} &rarr; {rankProgress.nextRank || 'APEX'} <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
 
               {/* Stepped Timeline */}
@@ -324,32 +519,25 @@ export const TodayView: React.FC = () => {
                   const rIndex = rankOrder.indexOf(r);
                   const isCurrent = r === profile.rank;
                   const isPassed = rIndex < currentRankIndex;
-                  const isLocked = rIndex > currentRankIndex;
 
                   if (isCurrent) {
                     return (
-                      <div
-                        key={r}
-                        className="text-sm text-red-500 font-bold flex items-center gap-2"
-                      >
-                        RANK {r} <span className="text-[10px] font-normal text-red-400 opacity-80">(CURRENT)</span>
+                      <div key={r} className="text-sm text-red-500 font-bold flex items-center gap-2">
+                        RANK {r} <span className="text-[10px] font-normal text-red-400 opacity-80">(ACTIVE TIER)</span>
                       </div>
                     );
                   }
 
                   if (isPassed) {
                     return (
-                      <div
-                        key={r}
-                        className="text-xs text-slate-400 opacity-60 flex items-center gap-2"
-                      >
-                        RANK {r} <span className="text-blue-500">✓</span>
+                      <div key={r} className="text-xs text-slate-400 opacity-70 flex items-center gap-2">
+                        RANK {r} <span className="text-blue-400">✓ SECURED</span>
                       </div>
                     );
                   }
 
                   return (
-                    <div key={r} className="text-xs text-slate-500 opacity-30">
+                    <div key={r} className="text-xs text-slate-600 opacity-40">
                       RANK {r}
                     </div>
                   );
@@ -358,18 +546,34 @@ export const TodayView: React.FC = () => {
             </div>
 
             {/* Consistency Meter */}
-            <div className="mt-6 pt-4 border-t border-slate-800 font-mono">
+            <div className="mt-6 pt-4 border-t border-blue-900/20 font-mono">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-tight">Consistency Meter</span>
-                <span className="text-[10px] text-white">
+                <span className="text-[11px] text-slate-400 uppercase tracking-tight">Tier Consistency Meter</span>
+                <span className="text-xs text-white font-bold">
                   {rankProgress.daysInCurrentRank} / {rankProgress.daysNeededForNextRank} DAYS
                 </span>
               </div>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-red-600 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.round((rankProgress.daysInCurrentRank / rankProgress.daysNeededForNextRank) * 100))}%` }}
+                  className="h-full bg-red-600 shadow-[0_0_8px_#ef4444] transition-all duration-500 rounded-full"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((rankProgress.daysInCurrentRank / rankProgress.daysNeededForNextRank) * 100)
+                    )}%`,
+                  }}
                 />
+              </div>
+              <div className="flex justify-between items-center mt-2 text-[10px] text-slate-500">
+                <span>
+                  {rankProgress.daysRemaining} days to Rank {rankProgress.nextRank || 'APEX'}
+                </span>
+                <button
+                  onClick={() => setActiveTab('ASCEND')}
+                  className="text-blue-400 hover:underline cursor-pointer"
+                >
+                  View Ladder &rarr;
+                </button>
               </div>
             </div>
           </div>
@@ -380,14 +584,16 @@ export const TodayView: React.FC = () => {
       <MissionModal
         isOpen={isMissionModalOpen}
         onClose={() => setIsMissionModalOpen(false)}
-        onSave={createMission}
+        onSave={(data) => createMission(data)}
       />
+
       <HabitModal
         isOpen={isHabitModalOpen}
         onClose={() => setIsHabitModalOpen(false)}
-        onSave={createHabit}
+        onSave={(data) => createHabit(data)}
       />
     </div>
   );
 };
+
 

@@ -33,19 +33,19 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   };
 
   const colorGradients = {
-    blue: 'from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]',
-    crimson: 'from-[#b91c1c] via-[#dc2626] to-[#ff334b]',
-    emerald: 'from-[#059669] via-[#10b981] to-[#34d399]',
-    amber: 'from-[#d97706] via-[#f59e0b] to-[#fbbf24]',
-    purple: 'from-[#7e22ce] via-[#9333ea] to-[#c084fc]',
+    blue: 'from-blue-600 to-blue-400',
+    crimson: 'from-red-700 to-red-500',
+    emerald: 'from-emerald-600 to-emerald-400',
+    amber: 'from-amber-600 to-amber-400',
+    purple: 'from-purple-600 to-purple-400',
   };
 
   const glowColors = {
-    blue: 'shadow-[0_0_12px_rgba(56,189,248,0.5)]',
-    crimson: 'shadow-[0_0_12px_rgba(255,51,75,0.5)]',
-    emerald: 'shadow-[0_0_12px_rgba(52,211,153,0.5)]',
-    amber: 'shadow-[0_0_12px_rgba(251,191,36,0.5)]',
-    purple: 'shadow-[0_0_12px_rgba(192,132,252,0.5)]',
+    blue: 'shadow-[0_0_10px_#3b82f6]',
+    crimson: 'shadow-[0_0_10px_#ef4444]',
+    emerald: 'shadow-[0_0_10px_#10b981]',
+    amber: 'shadow-[0_0_10px_#f59e0b]',
+    purple: 'shadow-[0_0_10px_#a855f7]',
   };
 
   return (

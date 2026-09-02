@@ -41,7 +41,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   E: {
     tier: 'E',
     name: 'Rank E',
-    codename: 'NOVICE OPERATIVE',
+    codename: 'Vigilante Initiate',
     order: 0,
     requiredDaysPerTier: 180,
     color: '#94a3b8',
@@ -53,7 +53,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   D: {
     tier: 'D',
     name: 'Rank D',
-    codename: 'STRAND WEAVER',
+    codename: 'Street Guardian',
     order: 1,
     requiredDaysPerTier: 180,
     color: '#38bdf8',
@@ -65,7 +65,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   C: {
     tier: 'C',
     name: 'Rank C',
-    codename: 'VORTEX SCOUT',
+    codename: 'City Defender',
     order: 2,
     requiredDaysPerTier: 180,
     color: '#22c55e',
@@ -77,7 +77,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   B: {
     tier: 'B',
     name: 'Rank B',
-    codename: 'ASCENDANT STRIKER',
+    codename: 'Web Champion',
     order: 3,
     requiredDaysPerTier: 180,
     color: '#3b82f6',
@@ -89,7 +89,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   A: {
     tier: 'A',
     name: 'Rank A',
-    codename: 'APEX SENTINEL',
+    codename: 'Apex Hero',
     order: 4,
     requiredDaysPerTier: 180,
     color: '#f59e0b',
@@ -101,7 +101,7 @@ export const RANK_CONFIG: Record<RankTier, RankInfo> = {
   S: {
     tier: 'S',
     name: 'Rank S',
-    codename: 'NEXUS WEAVER',
+    codename: 'Transcendent Web-Slinger',
     order: 5,
     requiredDaysPerTier: 180,
     color: '#ef4444',
@@ -176,47 +176,102 @@ export function getLevelProgress(totalXP: number): {
   }
 }
 
+export const REQUIRED_DAYS_PER_TIER = 180;
+
 /**
  * Calculates rank progression from total consistency days.
+ * Rules:
+ * - Starting rank is ALWAYS E with 0 / 180 successful days.
+ * - E -> D = 180 successful days
+ * - D -> C = 180 additional successful days
+ * - C -> B = 180 additional successful days
+ * - B -> A = 180 additional successful days
+ * - A -> S = 180 additional successful days
+ * - S -> SS = 180 additional successful days
+ * - SS -> SSS = 180 additional successful days
+ * - When successfulDays reaches 180, rank elevates to next tier and current-tier counter resets to 0.
+ * - Total successful days never decrease when a day is missed.
  */
-export function getRankProgress(consistencyDaysCompleted: number): {
+export function getRankProgress(
+  totalSuccessfulDays: number,
+  daysPerTier: number = REQUIRED_DAYS_PER_TIER
+): {
   currentRank: RankTier;
   nextRank: RankTier | null;
+  successfulDaysForCurrentRank: number;
+  requiredSuccessfulDaysForCurrentRank: number;
   daysInCurrentRank: number;
   daysNeededForNextRank: number;
   daysRemaining: number;
   progressPercent: number;
   isMaxRank: boolean;
+  totalSuccessfulDays: number;
 } {
-  const daysPerTier = 180;
+  const safeDays = Math.max(0, Math.floor(totalSuccessfulDays || 0));
   const currentTierIndex = Math.min(
     RANK_ORDER.length - 1,
-    Math.floor(consistencyDaysCompleted / daysPerTier)
+    Math.floor(safeDays / daysPerTier)
   );
   
   const currentRank = RANK_ORDER[currentTierIndex];
   const isMaxRank = currentTierIndex >= RANK_ORDER.length - 1;
   const nextRank = isMaxRank ? null : RANK_ORDER[currentTierIndex + 1];
   
-  const daysInCurrentRank = isMaxRank 
+  const successfulDaysForCurrentRank = isMaxRank 
     ? daysPerTier 
-    : consistencyDaysCompleted % daysPerTier;
+    : safeDays % daysPerTier;
     
-  const daysNeededForNextRank = daysPerTier;
-  const daysRemaining = isMaxRank ? 0 : daysNeededForNextRank - daysInCurrentRank;
+  const requiredSuccessfulDaysForCurrentRank = daysPerTier;
+  const daysRemaining = isMaxRank ? 0 : requiredSuccessfulDaysForCurrentRank - successfulDaysForCurrentRank;
   const progressPercent = isMaxRank 
     ? 100 
-    : Math.min(100, Math.round((daysInCurrentRank / daysNeededForNextRank) * 100));
+    : Math.min(100, Math.round((successfulDaysForCurrentRank / requiredSuccessfulDaysForCurrentRank) * 100));
 
   return {
     currentRank,
     nextRank,
-    daysInCurrentRank,
-    daysNeededForNextRank,
+    successfulDaysForCurrentRank,
+    requiredSuccessfulDaysForCurrentRank,
+    daysInCurrentRank: successfulDaysForCurrentRank,
+    daysNeededForNextRank: requiredSuccessfulDaysForCurrentRank,
     daysRemaining,
     progressPercent,
     isMaxRank,
+    totalSuccessfulDays: safeDays,
   };
+}
+
+/**
+ * Evaluates whether a calendar day is a SUCCESSFUL CONSISTENCY DAY.
+ * A day is ONLY counted as successful when:
+ * 1. ALL active required missions are completed (m.isActive && m.isRequired)
+ * 2. ALL active daily habits are completed (h.isActive)
+ * 
+ * Optional missions (m.isRequired === false) MUST NOT be required for a successful day.
+ */
+export function isSuccessfulConsistencyDay(
+  completedMissionIds: string[],
+  completedHabitIds: string[],
+  activeMissions: Mission[],
+  activeHabits: Habit[]
+): boolean {
+  const requiredMissions = activeMissions.filter((m) => m.isActive && m.isRequired);
+  const dailyHabits = activeHabits.filter((h) => h.isActive);
+
+  // If there are no required missions and no active habits, day cannot be evaluated as successful
+  if (requiredMissions.length === 0 && dailyHabits.length === 0) {
+    return false;
+  }
+
+  const allRequiredMissionsDone = requiredMissions.every((m) =>
+    completedMissionIds.includes(m.id)
+  );
+
+  const allHabitsDone = dailyHabits.every((h) =>
+    completedHabitIds.includes(h.id)
+  );
+
+  return allRequiredMissionsDone && allHabitsDone;
 }
 
 export const DEFAULT_REWARDS: Omit<Reward, 'id' | 'createdAt'>[] = [

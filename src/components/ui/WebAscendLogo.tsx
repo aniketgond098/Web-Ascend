@@ -1,4 +1,5 @@
 import React from 'react';
+import { SpiderIcon } from './SpiderIcon';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg' | 'hero';
@@ -13,11 +14,18 @@ export const WebAscendLogo: React.FC<LogoProps> = ({
   className = '',
   glow = true,
 }) => {
-  const iconSizes = {
-    sm: 'w-7 h-7',
+  const iconBoxSizes = {
+    sm: 'w-8 h-8',
     md: 'w-10 h-10',
     lg: 'w-12 h-12',
     hero: 'w-16 h-16',
+  };
+
+  const spiderSizes = {
+    sm: 20,
+    md: 26,
+    lg: 32,
+    hero: 44,
   };
 
   const textSizes = {
@@ -28,38 +36,36 @@ export const WebAscendLogo: React.FC<LogoProps> = ({
   };
 
   return (
-    <div className={`inline-flex items-center gap-3 font-bold select-none ${className}`}>
-      {/* Sleek Interface Geometric Web Emblem */}
-      <div className={`relative ${iconSizes[size]} flex items-center justify-center shrink-0`}>
-        {/* Outer Red Diamond */}
-        <div className="absolute inset-0 border-2 border-red-600 rotate-45 transition-transform duration-500" />
-        
-        {/* Inner Cyan Diamond */}
-        <div className="absolute inset-1.5 border border-blue-400 rotate-12 opacity-60" />
-        
-        {/* Center Glowing Nexus */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_white]" />
-        </div>
+    <div className={`inline-flex items-center gap-3 select-none ${className}`}>
+      {/* Original Geometric Spider / Web Emblem */}
+      <div
+        className={`relative ${iconBoxSizes[size]} flex items-center justify-center rounded-xl bg-gradient-to-br from-[#131b2e] via-[#090e1a] to-[#1c0d16] border border-red-500/40 shrink-0 group transition-all duration-300 hover:border-red-400 ${
+          glow ? 'shadow-[0_0_15px_rgba(239,68,68,0.25)]' : ''
+        }`}
+      >
+        {/* Subtle corner cyan bracket accents */}
+        <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 border-t border-l border-blue-400/70" />
+        <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r border-blue-400/70" />
+
+        <SpiderIcon size={spiderSizes[size]} color="#EF4444" glow={glow} />
 
         {glow && (
-          <div className="absolute inset-0 bg-red-600/10 blur-md rounded-full -z-10" />
+          <div className="absolute inset-0 bg-red-600/10 blur-md rounded-xl -z-10" />
         )}
       </div>
 
       {showText && (
         <div className="flex flex-col">
-          <h1 className={`font-bold text-white tracking-widest ${textSizes[size]} font-['Chakra_Petch']`}>
+          <h1 className={`font-bold text-white tracking-widest ${textSizes[size]} font-['Chakra_Petch'] leading-none`}>
             WEB <span className="text-red-500">ASCEND</span>
           </h1>
-          {size === 'hero' && (
-            <span className="text-[10px] tracking-[0.3em] text-blue-400 font-mono -mt-1">
-              SYSTEM v2.4 // PROTOCOL ACTIVE
-            </span>
-          )}
+          <span className="text-[9px] tracking-[0.22em] text-blue-400 font-mono mt-1 uppercase font-semibold">
+            ASCEND EVERY DAY.
+          </span>
         </div>
       )}
     </div>
   );
 };
+
 

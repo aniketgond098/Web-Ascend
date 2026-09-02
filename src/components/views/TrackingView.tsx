@@ -2,20 +2,18 @@ import React, { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Calendar as CalendarIcon,
-  CheckCircle2,
   Clock,
   Award,
-  Zap,
   Flame,
   ShieldCheck,
   CircleDot,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { HudCard } from '../ui/HudCard';
-import { ProgressBar } from '../ui/ProgressBar';
 import { formatDateString, formatReadableDate, parseDateString } from '../../utils/date';
 import { DailyRecord } from '../../types';
+import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
 
 export const TrackingView: React.FC = () => {
   const { dailyRecords, todayDate, missions, habits, profile } = useApp();
@@ -93,35 +91,35 @@ export const TrackingView: React.FC = () => {
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
-  const perfectDaysThisMonth = currentMonthRecords.filter((r) => r.isPerfectDay).length;
+  const perfectDaysThisMonth = currentMonthRecords.filter((r) => r.isSuccessfulDay || r.isPerfectDay).length;
   const totalDaysTracked = Object.keys(dailyRecords).length;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8 font-mono">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8 font-sans">
+      {/* 1. Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-blue-900/20 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-xs text-[#38bdf8] font-bold tracking-widest uppercase">
+          <div className="flex items-center gap-2 text-xs text-red-500 font-mono font-bold tracking-widest uppercase">
             <Clock className="w-4 h-4" />
-            <span>HISTORICAL ARCHIVES // CHRONO LOGS</span>
+            <span>TEMPORAL DIRECTIVES // SECTOR ARCHIVES</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white uppercase font-['Chakra_Petch'] tracking-wide">
-            CONSISTENCY TRACKING
+          <h1 className="text-2xl sm:text-3xl font-bold text-white uppercase font-['Chakra_Petch'] tracking-wide mt-1">
+            MISSION LOG
           </h1>
         </div>
 
         {/* Month Navigation */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 font-mono">
           <button
             onClick={jumpToToday}
-            className="px-3 py-1.5 rounded-lg bg-[#0e1628] border border-slate-700 hover:border-[#38bdf8] text-xs font-bold text-white transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-[#0A0E17] border border-blue-900/30 hover:border-red-400 text-xs font-bold text-white transition-colors cursor-pointer"
           >
             TODAY
           </button>
-          <div className="flex items-center gap-1 bg-[#090d18] p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1 bg-[#0A0E17] p-1 rounded-lg border border-blue-900/30">
             <button
               onClick={prevMonth}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
               aria-label="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -131,7 +129,7 @@ export const TrackingView: React.FC = () => {
             </span>
             <button
               onClick={nextMonth}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
               aria-label="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
@@ -140,53 +138,53 @@ export const TrackingView: React.FC = () => {
         </div>
       </div>
 
-      {/* Top Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <HudCard className="p-4">
-          <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">
+      {/* 2. Top Metrics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+        <div className="p-4 rounded-xl bg-[#0A0E17] border border-blue-900/20">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
             PERFECT DAYS (MONTH)
           </span>
-          <div className="text-2xl font-bold font-['Chakra_Petch'] text-[#22c55e] flex items-center gap-2">
+          <div className="text-2xl font-bold font-['Chakra_Petch'] text-emerald-400 flex items-center gap-2 mt-0.5">
             <Award className="w-5 h-5" />
             <span>{perfectDaysThisMonth} DAYS</span>
           </div>
-        </HudCard>
+        </div>
 
-        <HudCard className="p-4">
-          <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">
+        <div className="p-4 rounded-xl bg-[#0A0E17] border border-blue-900/20">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
             CURRENT STREAK
           </span>
-          <div className="text-2xl font-bold font-['Chakra_Petch'] text-[#ff334b] flex items-center gap-2">
-            <Flame className="w-5 h-5 fill-[#ff334b]/20" />
+          <div className="text-2xl font-bold font-['Chakra_Petch'] text-red-500 flex items-center gap-2 mt-0.5">
+            <Flame className="w-5 h-5 fill-red-500/20" />
             <span>{profile.currentStreak} DAYS</span>
           </div>
-        </HudCard>
+        </div>
 
-        <HudCard className="p-4">
-          <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">
+        <div className="p-4 rounded-xl bg-[#0A0E17] border border-blue-900/20">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
             ALL-TIME CONSISTENCY
           </span>
-          <div className="text-2xl font-bold font-['Chakra_Petch'] text-[#38bdf8]">
-            {profile.consistencyDaysCompleted} DAYS
+          <div className="text-2xl font-bold font-['Chakra_Petch'] text-blue-400 mt-0.5">
+            {profile.totalSuccessfulDays ?? profile.consistencyDaysCompleted} DAYS
           </div>
-        </HudCard>
+        </div>
 
-        <HudCard className="p-4">
-          <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">
-            RECORD ARCHIVES
+        <div className="p-4 rounded-xl bg-[#0A0E17] border border-blue-900/20">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
+            ARCHIVE LOGS
           </span>
-          <div className="text-2xl font-bold font-['Chakra_Petch'] text-slate-200">
+          <div className="text-2xl font-bold font-['Chakra_Petch'] text-white mt-0.5">
             {totalDaysTracked} LOGGED
           </div>
-        </HudCard>
+        </div>
       </div>
 
-      {/* Main Grid: Calendar (Left) & Day Detail Dossier (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* 3. Main Grid: Calendar (Left 8 cols) & Day Detail Dossier (Right 4 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Calendar Matrix (8 cols) */}
-        <HudCard className="lg:col-span-8 p-5">
+        <div className="lg:col-span-8 p-5 rounded-2xl bg-[#0A0E17] border border-blue-900/20 shadow-lg">
           {/* Weekday Labels */}
-          <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-400 text-xs py-2 border-b border-slate-800 mb-2 font-['Chakra_Petch']">
+          <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-400 text-xs py-2 border-b border-blue-900/20 mb-3 font-mono">
             <span>SUN</span>
             <span>MON</span>
             <span>TUE</span>
@@ -202,34 +200,34 @@ export const TrackingView: React.FC = () => {
               const isSelected = cell.dateStr === selectedDateStr;
               const isToday = cell.dateStr === todayDate;
               const hasRecord = !!cell.record;
-              const isPerfect = cell.record?.isPerfectDay || cell.record?.status === 'PERFECT';
-              const isPartial = cell.record?.status === 'PARTIAL' || (!isPerfect && (cell.record?.completedMissionIds.length || 0) > 0);
+              const isPerfect = Boolean(cell.record?.isSuccessfulDay || cell.record?.isPerfectDay || cell.record?.status === 'PERFECT');
+              const isPartial = cell.record?.status === 'PARTIAL' || (!isPerfect && ((cell.record?.completedMissionIds.length || 0) > 0 || (cell.record?.completedHabitIds.length || 0) > 0));
 
               return (
                 <div
                   key={idx}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
                   className={`
-                    relative min-h-[58px] sm:min-h-[72px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between cursor-pointer transition-all select-none
+                    relative min-h-[58px] sm:min-h-[70px] p-2 rounded-xl border flex flex-col justify-between cursor-pointer transition-all select-none
                     ${
                       !cell.isCurrentMonth
-                        ? 'opacity-30 border-transparent bg-[#060810]'
+                        ? 'opacity-25 border-transparent bg-slate-900/10'
                         : isSelected
-                        ? 'bg-[#121c32] border-[#38bdf8] shadow-[0_0_15px_rgba(56,189,248,0.25)]'
+                        ? 'bg-[#0F141F] border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.25)]'
                         : isToday
-                        ? 'bg-[#161222] border-[#ff334b]/60'
-                        : 'bg-[#090e1a]/80 border-slate-800/80 hover:border-slate-700'
+                        ? 'bg-red-950/20 border-red-500/50'
+                        : 'bg-[#0F141F]/60 border-blue-900/20 hover:border-blue-700/50'
                     }
                   `}
                 >
                   {/* Day Header */}
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start font-mono">
                     <span
                       className={`text-xs font-bold ${
                         isToday
-                          ? 'text-[#ff334b] font-black'
+                          ? 'text-red-400 font-black'
                           : isSelected
-                          ? 'text-[#38bdf8]'
+                          ? 'text-blue-400'
                           : cell.isCurrentMonth
                           ? 'text-slate-300'
                           : 'text-slate-600'
@@ -239,28 +237,28 @@ export const TrackingView: React.FC = () => {
                     </span>
 
                     {isToday && (
-                      <span className="text-[8px] font-bold px-1 rounded bg-[#ff334b]/20 text-[#ff334b]">
+                      <span className="text-[8px] font-bold px-1 rounded bg-red-950 text-red-400 border border-red-800/50">
                         NOW
                       </span>
                     )}
                   </div>
 
                   {/* Daily Status Indicator Glyph */}
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center justify-end font-mono">
                     {isPerfect ? (
-                      <div className="flex items-center gap-1 text-[10px] text-[#22c55e] font-bold">
-                        <span>✓</span>
+                      <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
                         <span className="hidden sm:inline text-[9px]">PERFECT</span>
                       </div>
                     ) : isPartial ? (
-                      <div className="flex items-center gap-1 text-[10px] text-[#38bdf8]">
-                        <span>◐</span>
+                      <div className="flex items-center gap-1 text-[10px] text-blue-400">
+                        <span className="w-2 h-2 rounded-full bg-blue-400" />
                         <span className="hidden sm:inline text-[9px]">PARTIAL</span>
                       </div>
                     ) : hasRecord && cell.record?.status === 'MISSED' ? (
                       <span className="text-[10px] text-slate-500">×</span>
                     ) : (
-                      <span className="text-[9px] text-slate-700">--</span>
+                      <span className="text-[9px] text-slate-700">·</span>
                     )}
                   </div>
                 </div>
@@ -269,36 +267,36 @@ export const TrackingView: React.FC = () => {
           </div>
 
           {/* Legend */}
-          <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2 font-mono">
+          <div className="mt-4 pt-3 border-t border-blue-900/20 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2 font-mono">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5">
-                <span className="text-[#22c55e] font-bold">✓</span> PERFECT DAY (100%)
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" /> PERFECT DAY (100%)
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[#38bdf8] font-bold">◐</span> PARTIAL
+                <span className="w-2 h-2 rounded-full bg-blue-400" /> PARTIAL
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-slate-600 font-bold">×</span> MISSED / REST
+                <span className="text-slate-600 font-bold">·</span> REST / IDLE
               </span>
             </div>
-            <span className="text-slate-500 text-[11px]">CLICK DATE FOR HISTORICAL ARCHIVE</span>
+            <span className="text-slate-500 text-[11px]">SELECT ANY DATE FOR TELEMETRY</span>
           </div>
-        </HudCard>
+        </div>
 
         {/* Day Detail Panel (4 cols) */}
-        <HudCard variant="blue" className="lg:col-span-4 p-5 flex flex-col justify-between">
+        <div className="lg:col-span-4 p-5 rounded-2xl bg-[#0A0E17] border border-blue-900/30 flex flex-col justify-between shadow-lg">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <div className="flex items-center justify-between pb-3 border-b border-blue-900/20 mb-4 font-mono">
               <div>
-                <span className="text-[10px] font-mono text-[#38bdf8] uppercase tracking-widest block">
-                  RECORD ARCHIVE
+                <span className="text-[10px] text-blue-400 uppercase tracking-widest block">
+                  ARCHIVE TELEMETRY
                 </span>
-                <h3 className="text-lg font-bold text-white uppercase font-['Chakra_Petch']">
+                <h3 className="text-base font-bold text-white uppercase font-['Chakra_Petch'] mt-0.5">
                   {formatReadableDate(selectedDateStr)}
                 </h3>
               </div>
               {isSelectedToday && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#ff334b]/20 text-[#ff334b] border border-[#ff334b]/40">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-800/40">
                   ACTIVE TODAY
                 </span>
               )}
@@ -310,10 +308,10 @@ export const TrackingView: React.FC = () => {
                 <div
                   className={`p-3 rounded-xl border flex items-center justify-between ${
                     selectedRecord.isPerfectDay
-                      ? 'bg-[#059669]/15 border-[#22c55e]/50 text-[#22c55e]'
+                      ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-400'
                       : selectedRecord.status === 'PARTIAL'
-                      ? 'bg-[#0369a1]/15 border-[#38bdf8]/50 text-[#38bdf8]'
-                      : 'bg-[#1e293b]/40 border-slate-700 text-slate-400'
+                      ? 'bg-blue-950/20 border-blue-500/40 text-blue-400'
+                      : 'bg-slate-900/40 border-slate-800 text-slate-400'
                   }`}
                 >
                   <span className="font-bold tracking-wider uppercase font-['Chakra_Petch']">
@@ -323,7 +321,7 @@ export const TrackingView: React.FC = () => {
                 </div>
 
                 {/* Quantitative Breakdown */}
-                <div className="space-y-2.5 bg-[#090e1a] p-3.5 rounded-xl border border-slate-800">
+                <div className="space-y-2.5 bg-[#0F141F] p-3.5 rounded-xl border border-blue-900/30">
                   <div className="flex justify-between items-center text-slate-300">
                     <span className="text-slate-400">MISSIONS COMPLETED:</span>
                     <strong className="text-white font-bold">
@@ -340,30 +338,34 @@ export const TrackingView: React.FC = () => {
 
                   <div className="flex justify-between items-center text-slate-300">
                     <span className="text-slate-400">XP SECURED:</span>
-                    <strong className="text-[#38bdf8] font-bold">
+                    <strong className="text-blue-400 font-bold">
                       +{selectedRecord.xpEarned || (selectedRecord.isPerfectDay ? 250 : 80)} XP
                     </strong>
                   </div>
 
                   <div className="flex justify-between items-center text-slate-300">
-                    <span className="text-slate-400">ESSENCE EARNED:</span>
-                    <strong className="text-[#ff334b] font-bold">
-                      +{selectedRecord.essenceEarned || (selectedRecord.isPerfectDay ? 200 : 70)} ◈
+                    <span className="text-slate-400">SPIDEY COINS:</span>
+                    <strong className="text-amber-300 font-bold flex items-center gap-1">
+                      <SpideyCoinIcon size={12} />
+                      +{selectedRecord.essenceEarned || (selectedRecord.isPerfectDay ? 200 : 70)}
                     </strong>
                   </div>
                 </div>
 
-                {/* Progress bar */}
+                {/* Execution Efficiency */}
                 <div>
-                  <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                  <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
                     <span>EXECUTION EFFICIENCY</span>
-                    <span>{selectedRecord.isPerfectDay ? '100%' : 'PARTIAL'}</span>
+                    <span className="text-white font-bold">{selectedRecord.isPerfectDay ? '100%' : 'PARTIAL'}</span>
                   </div>
-                  <ProgressBar
-                    progress={selectedRecord.isPerfectDay ? 100 : 65}
-                    color={selectedRecord.isPerfectDay ? 'emerald' : 'blue'}
-                    height="sm"
-                  />
+                  <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        selectedRecord.isPerfectDay ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-blue-500'
+                      }`}
+                      style={{ width: selectedRecord.isPerfectDay ? '100%' : '65%' }}
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -371,17 +373,17 @@ export const TrackingView: React.FC = () => {
                 <CircleDot className="w-8 h-8 mx-auto text-slate-600 mb-2" />
                 <p>NO ARCHIVE LOGGED FOR THIS DATE.</p>
                 <p className="text-[10px] text-slate-600">
-                  Data logs generate automatically during daily operation cycles.
+                  Daily outputs are logged automatically during system cycles.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#38bdf8]" />
-            <span>Immutable local ledger verified.</span>
+          <div className="pt-4 border-t border-blue-900/20 text-[11px] font-mono text-slate-400 flex items-center gap-2 mt-4">
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+            <span>Cryptographic local ledger verified.</span>
           </div>
-        </HudCard>
+        </div>
       </div>
     </div>
   );

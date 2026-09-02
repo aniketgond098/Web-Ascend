@@ -31,7 +31,8 @@ export interface DailyRecord {
   date: string; // YYYY-MM-DD
   completedMissionIds: string[];
   completedHabitIds: string[];
-  isPerfectDay: boolean;
+  isSuccessfulDay: boolean; // True ONLY when all active required missions + all active habits are completed
+  isPerfectDay: boolean; // Alias / synonym for backwards compatibility
   xpEarned: number;
   essenceEarned: number;
   totalRequiredMissions: number;
@@ -83,16 +84,20 @@ export interface UserProfile {
   username: string;
   level: number;
   rank: RankTier;
+  successfulDaysForCurrentRank: number;
+  requiredSuccessfulDaysForCurrentRank: number;
+  totalSuccessfulDays: number;
+  consistencyDaysCompleted: number; // Synchronized alias of totalSuccessfulDays
   totalXP: number;
   currentEssence: number;
   totalEssenceEarned: number;
-  consistencyDaysCompleted: number;
   currentStreak: number;
   longestStreak: number;
   soundEnabled: boolean;
   initialized: boolean;
   joinedDate: string;
   lastActiveDate: string;
+  createdAt?: string | number;
   avatarIcon?: string;
   rpgStats: {
     discipline: number;

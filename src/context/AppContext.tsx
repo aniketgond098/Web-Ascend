@@ -19,7 +19,9 @@ import {
   STARTER_HABITS,
   getLevelProgress,
   getRankProgress,
+  isSuccessfulConsistencyDay,
   RANK_CONFIG,
+  RANK_ORDER,
 } from '../config/progression';
 import {
   getTodayDateString,
@@ -88,11 +90,40 @@ interface AppContextType {
   toggleSound: () => void;
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
+  resetTestProgression: () => void;
+  simulateSuccessfulDay: () => void;
+  simulateTierAscension: () => void;
   triggerAscendSimulation: () => void;
   resetAllData: () => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
+const createDefaultProfile = (today: string): UserProfile => ({
+  username: 'Operative',
+  level: 1,
+  rank: 'E',
+  successfulDaysForCurrentRank: 0,
+  requiredSuccessfulDaysForCurrentRank: 180,
+  totalSuccessfulDays: 0,
+  consistencyDaysCompleted: 0,
+  totalXP: 0,
+  currentEssence: 0,
+  totalEssenceEarned: 0,
+  currentStreak: 0,
+  longestStreak: 0,
+  soundEnabled: true,
+  initialized: true,
+  joinedDate: today,
+  lastActiveDate: today,
+  rpgStats: {
+    discipline: 20,
+    focus: 20,
+    strength: 20,
+    intelligence: 20,
+    consistency: 20,
+  },
+});
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const todayDate = getTodayDateString();
@@ -102,34 +133,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Clean legacy demo/fake seeded data (e.g., Rank B, level 24, or 124 days)
+        if (
+          (parsed.rank === 'B' && parsed.consistencyDaysCompleted === 124) ||
+          parsed.totalXP === 2430 ||
+          parsed.level === 24
+        ) {
+          const fresh = createDefaultProfile(todayDate);
+          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(fresh));
+          return fresh;
+        }
+
+        // Recompute rank and rank progress strictly from totalSuccessfulDays (or consistencyDaysCompleted)
+        const totalDays = Math.max(0, parsed.totalSuccessfulDays ?? parsed.consistencyDaysCompleted ?? 0);
+        const rankProg = getRankProgress(totalDays);
+
+        return {
+          ...createDefaultProfile(todayDate),
+          ...parsed,
+          rank: rankProg.currentRank,
+          successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+          requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+          totalSuccessfulDays: totalDays,
+          consistencyDaysCompleted: totalDays,
+        };
       } catch {
         // fallback
       }
     }
-    // Default initial profile before onboarding
-    return {
-      username: 'Operative',
-      level: 24,
-      rank: 'B',
-      totalXP: 2430,
-      currentEssence: 2450,
-      totalEssenceEarned: 3200,
-      consistencyDaysCompleted: 124,
-      currentStreak: 27,
-      longestStreak: 84,
-      soundEnabled: true,
-      initialized: true,
-      joinedDate: '2026-05-01',
-      lastActiveDate: todayDate,
-      rpgStats: {
-        discipline: 82,
-        focus: 76,
-        strength: 84,
-        intelligence: 90,
-        consistency: 88,
-      },
-    };
+    // Every newly created user MUST start at Rank E, 0/180, Level 1, 0 XP, 0 Essence
+    return createDefaultProfile(todayDate);
   });
 
   const [missions, setMissions] = useState<Mission[]>(() => {
@@ -153,83 +187,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return STARTER_HABITS.map((h, idx) => ({
       ...h,
       id: `h_${idx + 1}`,
-      currentStreak: 12 + idx * 3,
-      longestStreak: 25 + idx * 5,
-      createdAt: Date.now() - (idx + 1) * 86400000 * 10,
+      currentStreak: 0,
+      longestStreak: 0,
+      createdAt: Date.now(),
     }));
   });
 
   const [dailyRecords, setDailyRecords] = useState<Record<string, DailyRecord>>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.DAILY_RECORDS);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
-    }
-    
-    // Seed initial historical 30 days so calendar and tracking look rich and functional
-    const records: Record<string, DailyRecord> = {};
-    const now = new Date();
-    for (let i = 28; i >= 1; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dStr = formatDateString(d);
-      const isPerfect = i % 4 !== 0;
-      records[dStr] = {
-        date: dStr,
-        completedMissionIds: isPerfect ? ['m_1', 'm_2', 'm_3', 'm_4'] : ['m_1', 'm_2'],
-        completedHabitIds: isPerfect ? ['h_1', 'h_2', 'h_3', 'h_4', 'h_5'] : ['h_1', 'h_2'],
-        isPerfectDay: isPerfect,
-        xpEarned: isPerfect ? 210 : 80,
-        essenceEarned: isPerfect ? 190 : 70,
-        totalRequiredMissions: 3,
-        totalActiveHabits: 5,
-        status: isPerfect ? 'PERFECT' : 'PARTIAL',
-      };
+      try {
+        const parsed = JSON.parse(saved);
+        // If legacy seeded records exist (e.g. 210 XP / 190 essence demo patterns), clean them
+        const hasLegacySeeded = Object.values(parsed).some(
+          (r: any) => r && r.xpEarned === 210 && r.essenceEarned === 190
+        );
+        if (hasLegacySeeded) {
+          return {
+            [todayDate]: {
+              date: todayDate,
+              completedMissionIds: [],
+              completedHabitIds: [],
+              isSuccessfulDay: false,
+              isPerfectDay: false,
+              xpEarned: 0,
+              essenceEarned: 0,
+              totalRequiredMissions: STARTER_MISSIONS.filter((m) => m.isRequired).length,
+              totalActiveHabits: STARTER_HABITS.length,
+              status: 'IN_PROGRESS',
+            },
+          };
+        }
+        return parsed;
+      } catch {}
     }
 
-    // Seed Today with partial completion
-    records[todayDate] = {
-      date: todayDate,
-      completedMissionIds: ['m_1', 'm_2'],
-      completedHabitIds: ['h_1', 'h_2'],
-      isPerfectDay: false,
-      xpEarned: 45,
-      essenceEarned: 35,
-      totalRequiredMissions: 3,
-      totalActiveHabits: 5,
-      status: 'IN_PROGRESS',
+    // New user starts with clean today record
+    return {
+      [todayDate]: {
+        date: todayDate,
+        completedMissionIds: [],
+        completedHabitIds: [],
+        isSuccessfulDay: false,
+        isPerfectDay: false,
+        xpEarned: 0,
+        essenceEarned: 0,
+        totalRequiredMissions: STARTER_MISSIONS.filter((m) => m.isRequired).length,
+        totalActiveHabits: STARTER_HABITS.length,
+        status: 'IN_PROGRESS',
+      },
     };
-
-    return records;
   });
 
   const [xpTransactions, setXpTransactions] = useState<XPTransaction[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.XP_TRANSACTIONS);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.some((tx: any) => tx.id === 'xp_5' && tx.description === 'Yesterday Perfect Day')) {
+          return [];
+        }
+        return parsed;
+      } catch {}
     }
-    return [
-      { id: 'xp_1', amount: 25, source: 'MISSION', description: 'Complete Mathematics', timestamp: Date.now() - 3600000 * 4, date: todayDate },
-      { id: 'xp_2', amount: 20, source: 'MISSION', description: 'Workout Session', timestamp: Date.now() - 3600000 * 3, date: todayDate },
-      { id: 'xp_3', amount: 15, source: 'HABIT', description: 'Wake Up Early', timestamp: Date.now() - 3600000 * 5, date: todayDate },
-      { id: 'xp_4', amount: 15, source: 'HABIT', description: 'Daily Hydration', timestamp: Date.now() - 3600000 * 2, date: todayDate },
-      { id: 'xp_5', amount: 100, source: 'PERFECT_DAY', description: 'Yesterday Perfect Day', timestamp: Date.now() - 86400000, date: todayDate },
-    ];
+    return [];
   });
 
   const [essenceTransactions, setEssenceTransactions] = useState<EssenceTransaction[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.some((tx: any) => tx.id === 'ess_6' && tx.description === 'Level 24 Milestone')) {
+          return [];
+        }
+        return parsed;
+      } catch {}
     }
-    return [
-      { id: 'ess_1', amount: 20, source: 'MISSION', description: 'Complete Mathematics', timestamp: Date.now() - 3600000 * 4, date: todayDate },
-      { id: 'ess_2', amount: 15, source: 'MISSION', description: 'Workout Session', timestamp: Date.now() - 3600000 * 3, date: todayDate },
-      { id: 'ess_3', amount: 15, source: 'HABIT', description: 'Wake Up Early', timestamp: Date.now() - 3600000 * 5, date: todayDate },
-      { id: 'ess_4', amount: 10, source: 'HABIT', description: 'Daily Hydration', timestamp: Date.now() - 3600000 * 2, date: todayDate },
-      { id: 'ess_5', amount: 100, source: 'PERFECT_DAY', description: 'Yesterday Perfect Day', timestamp: Date.now() - 86400000, date: todayDate },
-      { id: 'ess_6', amount: 50, source: 'LEVEL_UP', description: 'Level 24 Milestone', timestamp: Date.now() - 86400000 * 3, date: todayDate },
-      { id: 'ess_7', amount: -250, source: 'PURCHASE', description: 'Movie Night Unlocked', timestamp: Date.now() - 86400000 * 2, date: todayDate },
-    ];
+    return [];
   });
 
   const [rewards, setRewards] = useState<Reward[]>(() => {
@@ -247,41 +282,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [purchases, setPurchases] = useState<RewardPurchase[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PURCHASES);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.some((p: any) => p.id === 'pur_1')) {
+          return [];
+        }
+        return parsed;
+      } catch {}
     }
-    return [
-      {
-        id: 'pur_1',
-        rewardId: 'rew_3',
-        rewardName: 'MOVIE NIGHT',
-        cost: 250,
-        timestamp: Date.now() - 86400000 * 2,
-        date: todayDate,
-      },
-    ];
+    return [];
   });
 
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.some((n: any) => n.id === 'notif_1' && n.message?.includes('4 objectives remaining'))) {
+          return [
+            {
+              id: `notif_init_${Date.now()}`,
+              title: 'SYSTEM ONLINE',
+              message: 'Neural link active. Operative initialized at Rank E. Complete all required missions and daily habits to advance.',
+              type: 'SYSTEM',
+              timestamp: Date.now(),
+              read: false,
+            },
+          ];
+        }
+        return parsed;
+      } catch {}
     }
     return [
       {
-        id: 'notif_1',
+        id: `notif_init_${Date.now()}`,
         title: 'SYSTEM ONLINE',
-        message: 'Welcome back. Neural link active. 4 objectives remaining today.',
+        message: 'Neural link active. Operative initialized at Rank E. Complete all required missions and daily habits to advance.',
         type: 'SYSTEM',
-        timestamp: Date.now() - 3600000 * 2,
+        timestamp: Date.now(),
         read: false,
-      },
-      {
-        id: 'notif_2',
-        title: 'STREAK EXTENDED',
-        message: '27-day streak maintained. Momentum verified.',
-        type: 'STREAK',
-        timestamp: Date.now() - 86400000,
-        read: true,
       },
     ];
   });
@@ -466,7 +505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [todayDate, addNotification]);
 
-  // Check Perfect Day Condition
+  // Check Successful Day Condition and Update Rank Progression
   const evaluateDayCompletion = useCallback((
     completedMissionIds: string[],
     completedHabitIds: string[]
@@ -474,20 +513,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const requiredActiveMissions = missions.filter((m) => m.isActive && m.isRequired);
     const activeHabits = habits.filter((h) => h.isActive);
 
-    const allRequiredMissionsDone = requiredActiveMissions.every((m) =>
-      completedMissionIds.includes(m.id)
+    const isSuccessful = isSuccessfulConsistencyDay(
+      completedMissionIds,
+      completedHabitIds,
+      missions,
+      habits
     );
-    const allHabitsDone = activeHabits.every((h) =>
-      completedHabitIds.includes(h.id)
-    );
-
-    const isPerfect = allRequiredMissionsDone && allHabitsDone && (requiredActiveMissions.length > 0 || activeHabits.length > 0);
 
     setDailyRecords((prev) => {
       const currentToday = prev[todayDate] || {
         date: todayDate,
         completedMissionIds: [],
         completedHabitIds: [],
+        isSuccessfulDay: false,
         isPerfectDay: false,
         xpEarned: 0,
         essenceEarned: 0,
@@ -500,82 +538,102 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...currentToday,
         completedMissionIds,
         completedHabitIds,
-        isPerfectDay: isPerfect,
+        isSuccessfulDay: isSuccessful,
+        isPerfectDay: isSuccessful,
         totalRequiredMissions: requiredActiveMissions.length,
         totalActiveHabits: activeHabits.length,
-        status: isPerfect ? 'PERFECT' : (completedMissionIds.length > 0 || completedHabitIds.length > 0 ? 'PARTIAL' : 'IN_PROGRESS'),
+        status: isSuccessful ? 'PERFECT' : (completedMissionIds.length > 0 || completedHabitIds.length > 0 ? 'PARTIAL' : 'IN_PROGRESS'),
       };
 
-      return {
+      const nextRecords = {
         ...prev,
         [todayDate]: updatedRecord,
       };
-    });
 
-    // Check if Perfect Day reward should be granted (Anti-Farm: once per day)
-    if (isPerfect && !hasRewardIssuedToday('PERFECT_DAY')) {
-      soundFX.playPerfectDay();
-      handleXPAndEssenceGain(
-        BASE_REWARDS.perfectDayXP,
-        BASE_REWARDS.perfectDayEssence,
-        'PERFECT_DAY',
-        'Perfect Day: All Objectives Complete'
-      );
+      // Calculate total successful days strictly from daily completion records (1 per calendar day max)
+      const totalSuccessfulDays = (Object.values(nextRecords) as DailyRecord[]).filter((r) => r.isSuccessfulDay).length;
+      const rankProg = getRankProgress(totalSuccessfulDays);
 
-      // Increment consistency days
-      setProfile((prev) => {
-        const updatedConsistency = prev.consistencyDaysCompleted + 1;
-        const oldRankProg = getRankProgress(prev.consistencyDaysCompleted);
-        const newRankProg = getRankProgress(updatedConsistency);
+      // Update streaks from daily completion history
+      const { currentStreak, longestStreak } = calculateStreaks(nextRecords, todayDate);
 
-        // Check if rank tier elevated
-        if (newRankProg.currentRank !== oldRankProg.currentRank) {
+      // Update Profile Rank & Consistency
+      setProfile((prevProfile) => {
+        const prevTierIndex = RANK_ORDER.indexOf(prevProfile.rank);
+        const newTierIndex = RANK_ORDER.indexOf(rankProg.currentRank);
+
+        // Check if rank tier elevated (advancement only)
+        if (newTierIndex > prevTierIndex) {
           soundFX.playRankUp();
           const rankBonusEssence = BASE_REWARDS.rankUpEssence;
           const rankTx: EssenceTransaction = {
             id: `ess_rank_${Date.now()}`,
             amount: rankBonusEssence,
             source: 'RANK_UP',
-            description: `Ascension to ${newRankProg.currentRank} Achieved`,
+            description: `Ascension to Rank ${rankProg.currentRank} Achieved!`,
             timestamp: Date.now() + 20,
             date: todayDate,
           };
           setEssenceTransactions((txs) => [rankTx, ...txs]);
 
           addNotification(
-            'ASCENSION COMPLETE',
-            `Rank upgraded from ${oldRankProg.currentRank} to ${newRankProg.currentRank}! +${rankBonusEssence} Essence awarded.`,
+            'ASCENSION COMPLETED',
+            `Operative ascended from Rank ${prevProfile.rank} to Rank ${rankProg.currentRank}! +${rankBonusEssence} Essence awarded.`,
             'RANK_PROGRESS'
           );
 
           setCelebration({
             type: 'RANK_UP',
             data: {
-              oldRank: oldRankProg.currentRank,
-              newRank: newRankProg.currentRank,
+              oldRank: prevProfile.rank,
+              newRank: rankProg.currentRank,
               bonusEssence: rankBonusEssence,
             },
           });
 
           return {
-            ...prev,
-            consistencyDaysCompleted: updatedConsistency,
-            rank: newRankProg.currentRank,
-            currentEssence: prev.currentEssence + rankBonusEssence,
-            totalEssenceEarned: prev.totalEssenceEarned + rankBonusEssence,
+            ...prevProfile,
+            rank: rankProg.currentRank,
+            successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+            requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+            totalSuccessfulDays,
+            consistencyDaysCompleted: totalSuccessfulDays,
+            currentStreak,
+            longestStreak: Math.max(prevProfile.longestStreak, longestStreak),
+            currentEssence: prevProfile.currentEssence + rankBonusEssence,
+            totalEssenceEarned: prevProfile.totalEssenceEarned + rankBonusEssence,
           };
         }
 
         return {
-          ...prev,
-          consistencyDaysCompleted: updatedConsistency,
+          ...prevProfile,
+          rank: rankProg.currentRank,
+          successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+          requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+          totalSuccessfulDays,
+          consistencyDaysCompleted: totalSuccessfulDays,
+          currentStreak,
+          longestStreak: Math.max(prevProfile.longestStreak, longestStreak),
         };
       });
 
+      return nextRecords;
+    });
+
+    // Check if Perfect Day reward should be granted (Anti-Farm: once per day)
+    if (isSuccessful && !hasRewardIssuedToday('PERFECT_DAY')) {
+      soundFX.playPerfectDay();
+      handleXPAndEssenceGain(
+        BASE_REWARDS.perfectDayXP,
+        BASE_REWARDS.perfectDayEssence,
+        'PERFECT_DAY',
+        'Successful Day: All Required Directives & Habits Complete'
+      );
+
       addNotification(
-        'PERFECT DAY ACHIEVED',
-        `All daily objectives completed. +${BASE_REWARDS.perfectDayXP} XP & +${BASE_REWARDS.perfectDayEssence} Essence awarded.`,
-        'PERFECT_DAY'
+        'SUCCESSFUL DAY SECURED',
+        `All required missions and daily habits completed. +1 Day added to Rank Progress!`,
+        'RANK_PROGRESS'
       );
 
       setCelebration({
@@ -805,52 +863,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Profile Settings
-  const initializeProfile = useCallback((username: string, startPreset = true) => {
+  const initializeProfile = useCallback((username: string) => {
     const freshProfile: UserProfile = {
+      ...createDefaultProfile(todayDate),
       username: username.trim() || 'Operative',
-      level: 1,
-      rank: 'E',
-      totalXP: 0,
-      currentEssence: 0,
-      totalEssenceEarned: 0,
-      consistencyDaysCompleted: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      soundEnabled: true,
-      initialized: true,
-      joinedDate: todayDate,
-      lastActiveDate: todayDate,
-      rpgStats: {
-        discipline: 20,
-        focus: 20,
-        strength: 20,
-        intelligence: 20,
-        consistency: 20,
-      },
     };
 
     setProfile(freshProfile);
-    if (!startPreset) {
-      setDailyRecords({
-        [todayDate]: {
-          date: todayDate,
-          completedMissionIds: [],
-          completedHabitIds: [],
-          isPerfectDay: false,
-          xpEarned: 0,
-          essenceEarned: 0,
-          totalRequiredMissions: 3,
-          totalActiveHabits: 5,
-          status: 'IN_PROGRESS',
-        },
-      });
-      setXpTransactions([]);
-      setEssenceTransactions([]);
-      setPurchases([]);
-    }
+    setDailyRecords({
+      [todayDate]: {
+        date: todayDate,
+        completedMissionIds: [],
+        completedHabitIds: [],
+        isSuccessfulDay: false,
+        isPerfectDay: false,
+        xpEarned: 0,
+        essenceEarned: 0,
+        totalRequiredMissions: missions.filter((m) => m.isActive && m.isRequired).length,
+        totalActiveHabits: habits.filter((h) => h.isActive).length,
+        status: 'IN_PROGRESS',
+      },
+    });
+    setXpTransactions([]);
+    setEssenceTransactions([]);
+    setPurchases([]);
 
-    addNotification('SYSTEM ONLINE', `Welcome, ${freshProfile.username}. Systems fully online.`, 'SYSTEM');
-  }, [todayDate, addNotification]);
+    addNotification('SYSTEM ONLINE', `Welcome, ${freshProfile.username}. Operative initialized at Rank E.`, 'SYSTEM');
+  }, [todayDate, missions, habits, addNotification]);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => ({ ...prev, ...updates }));
@@ -875,36 +914,206 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
   }, []);
 
-  // Demo Ascension Trigger for testing/simulation
-  const triggerAscendSimulation = useCallback(() => {
-    soundFX.playRankUp();
-    const rankOrder = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'] as const;
-    const currentIdx = rankOrder.indexOf(profile.rank as typeof rankOrder[number]);
-    const nextIdx = Math.min(rankOrder.length - 1, currentIdx + 1);
-    const nextRank = rankOrder[nextIdx];
+  // Diagnostic / Dev Tool: Reset Test Progression
+  // Sets: Rank -> E, Rank Progress -> 0 / 180, Level -> 1, XP -> 0, Essence -> 0, Streak -> 0
+  const resetTestProgression = useCallback(() => {
+    soundFX.playBlip();
+    const cleanProfile: UserProfile = {
+      ...createDefaultProfile(todayDate),
+      username: profile.username || 'Operative',
+      soundEnabled: profile.soundEnabled ?? true,
+    };
 
-    setCelebration({
-      type: 'RANK_UP',
-      data: {
-        oldRank: profile.rank,
-        newRank: nextRank,
-        bonusEssence: BASE_REWARDS.rankUpEssence,
+    const cleanRecords: Record<string, DailyRecord> = {
+      [todayDate]: {
+        date: todayDate,
+        completedMissionIds: [],
+        completedHabitIds: [],
+        isSuccessfulDay: false,
+        isPerfectDay: false,
+        xpEarned: 0,
+        essenceEarned: 0,
+        totalRequiredMissions: missions.filter((m) => m.isActive && m.isRequired).length,
+        totalActiveHabits: habits.filter((h) => h.isActive).length,
+        status: 'IN_PROGRESS',
       },
+    };
+
+    setProfile(cleanProfile);
+    setDailyRecords(cleanRecords);
+    setXpTransactions([]);
+    setEssenceTransactions([]);
+    setPurchases([]);
+    setNotifications([
+      {
+        id: `notif_reset_${Date.now()}`,
+        title: 'PROGRESSION RESET',
+        message: 'System re-initialized to Rank E (0 / 180 days), Level 1, 0 XP, 0 Essence.',
+        type: 'SYSTEM',
+        timestamp: Date.now(),
+        read: false,
+      },
+    ]);
+
+    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(cleanProfile));
+    localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(cleanRecords));
+    localStorage.removeItem(STORAGE_KEYS.XP_TRANSACTIONS);
+    localStorage.removeItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS);
+    localStorage.removeItem(STORAGE_KEYS.PURCHASES);
+  }, [todayDate, profile.username, profile.soundEnabled, missions, habits]);
+
+  // Diagnostic / Dev Tool: Simulate 1 Successful Consistency Day
+  const simulateSuccessfulDay = useCallback(() => {
+    soundFX.playComplete();
+    setDailyRecords((prev) => {
+      const now = new Date();
+      let dayOffset = 1;
+      let dateKey = '';
+      while (dayOffset < 3650) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - dayOffset);
+        const str = formatDateString(d);
+        if (!prev[str] || !prev[str].isSuccessfulDay) {
+          dateKey = str;
+          break;
+        }
+        dayOffset++;
+      }
+
+      if (!dateKey) dateKey = todayDate;
+
+      const nextRecords = {
+        ...prev,
+        [dateKey]: {
+          date: dateKey,
+          completedMissionIds: ['m_sim'],
+          completedHabitIds: ['h_sim'],
+          isSuccessfulDay: true,
+          isPerfectDay: true,
+          xpEarned: 100,
+          essenceEarned: 100,
+          totalRequiredMissions: 1,
+          totalActiveHabits: 1,
+          status: 'PERFECT' as const,
+        },
+      };
+
+      const totalSuccessfulDays = (Object.values(nextRecords) as DailyRecord[]).filter((r) => r.isSuccessfulDay).length;
+      const rankProg = getRankProgress(totalSuccessfulDays);
+      const { currentStreak, longestStreak } = calculateStreaks(nextRecords, todayDate);
+
+      setProfile((p) => {
+        const prevTierIndex = RANK_ORDER.indexOf(p.rank);
+        const newTierIndex = RANK_ORDER.indexOf(rankProg.currentRank);
+
+        if (newTierIndex > prevTierIndex) {
+          soundFX.playRankUp();
+          const bonusEssence = BASE_REWARDS.rankUpEssence;
+          setCelebration({
+            type: 'RANK_UP',
+            data: {
+              oldRank: p.rank,
+              newRank: rankProg.currentRank,
+              bonusEssence,
+            },
+          });
+          return {
+            ...p,
+            rank: rankProg.currentRank,
+            successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+            requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+            totalSuccessfulDays,
+            consistencyDaysCompleted: totalSuccessfulDays,
+            currentStreak,
+            longestStreak: Math.max(p.longestStreak, longestStreak),
+            currentEssence: p.currentEssence + bonusEssence,
+            totalEssenceEarned: p.totalEssenceEarned + bonusEssence,
+          };
+        }
+
+        return {
+          ...p,
+          rank: rankProg.currentRank,
+          successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+          requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+          totalSuccessfulDays,
+          consistencyDaysCompleted: totalSuccessfulDays,
+          currentStreak,
+          longestStreak: Math.max(p.longestStreak, longestStreak),
+        };
+      });
+
+      return nextRecords;
     });
+  }, [todayDate]);
 
-    handleXPAndEssenceGain(
-      50,
-      BASE_REWARDS.rankUpEssence,
-      'RANK_UP',
-      `Ascension Simulation: Promoted to ${nextRank}`
-    );
+  // Diagnostic / Dev Tool: Simulate 180 Successful Consistency Days (Tier Ascension)
+  const simulateTierAscension = useCallback(() => {
+    soundFX.playRankUp();
+    setDailyRecords((prev) => {
+      const nextRecords = { ...prev };
+      const currentSuccessCount = (Object.values(prev) as DailyRecord[]).filter((r) => r.isSuccessfulDay).length;
+      const daysToNextTier = 180 - (currentSuccessCount % 180);
+      const daysToAdd = daysToNextTier === 0 ? 180 : daysToNextTier;
 
-    setProfile((prev) => ({
-      ...prev,
-      rank: nextRank,
-      consistencyDaysCompleted: prev.consistencyDaysCompleted + 180,
-    }));
-  }, [profile.rank, handleXPAndEssenceGain]);
+      const now = new Date();
+      let added = 0;
+      let offset = 1;
+      while (added < daysToAdd && offset < 5000) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - offset);
+        const str = formatDateString(d);
+        if (!nextRecords[str] || !nextRecords[str].isSuccessfulDay) {
+          nextRecords[str] = {
+            date: str,
+            completedMissionIds: ['m_sim'],
+            completedHabitIds: ['h_sim'],
+            isSuccessfulDay: true,
+            isPerfectDay: true,
+            xpEarned: 100,
+            essenceEarned: 100,
+            totalRequiredMissions: 1,
+            totalActiveHabits: 1,
+            status: 'PERFECT',
+          };
+          added++;
+        }
+        offset++;
+      }
+
+      const totalSuccessfulDays = (Object.values(nextRecords) as DailyRecord[]).filter((r) => r.isSuccessfulDay).length;
+      const rankProg = getRankProgress(totalSuccessfulDays);
+      const { currentStreak, longestStreak } = calculateStreaks(nextRecords, todayDate);
+
+      setProfile((p) => {
+        const bonusEssence = BASE_REWARDS.rankUpEssence;
+        setCelebration({
+          type: 'RANK_UP',
+          data: {
+            oldRank: p.rank,
+            newRank: rankProg.currentRank,
+            bonusEssence,
+          },
+        });
+        return {
+          ...p,
+          rank: rankProg.currentRank,
+          successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
+          requiredSuccessfulDaysForCurrentRank: rankProg.requiredSuccessfulDaysForCurrentRank,
+          totalSuccessfulDays,
+          consistencyDaysCompleted: totalSuccessfulDays,
+          currentStreak,
+          longestStreak: Math.max(p.longestStreak, longestStreak),
+          currentEssence: p.currentEssence + bonusEssence,
+          totalEssenceEarned: p.totalEssenceEarned + bonusEssence,
+        };
+      });
+
+      return nextRecords;
+    });
+  }, [todayDate]);
+
+  const triggerAscendSimulation = simulateTierAscension;
 
   const resetAllData = useCallback(() => {
     localStorage.clear();
@@ -944,6 +1153,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleSound,
     markNotificationRead,
     clearNotifications,
+    resetTestProgression,
+    simulateSuccessfulDay,
+    simulateTierAscension,
     triggerAscendSimulation,
     resetAllData,
   }), [
@@ -978,6 +1190,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleSound,
     markNotificationRead,
     clearNotifications,
+    resetTestProgression,
+    simulateSuccessfulDay,
+    simulateTierAscension,
     triggerAscendSimulation,
     resetAllData,
   ]);

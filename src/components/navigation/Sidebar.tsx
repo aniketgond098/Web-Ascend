@@ -25,13 +25,13 @@ export const Sidebar: React.FC = () => {
     icon: React.FC<{ className?: string }>;
     badge?: string;
   }[] = [
-    { id: 'TODAY', label: 'TODAY', glyph: '◎', icon: Compass },
+    { id: 'TODAY', label: 'WEB HUB', glyph: '◉', icon: Compass },
     { id: 'MISSIONS', label: 'MISSIONS', glyph: '🎯', icon: Target },
-    { id: 'HABITS', label: 'HABITS', glyph: '✓', icon: CheckSquare },
-    { id: 'TRACKING', label: 'TRACKING', glyph: '◷', icon: Calendar },
-    { id: 'REWARDS', label: 'REWARDS', glyph: '◈', icon: Sparkles },
-    { id: 'ASCEND', label: 'ASCEND', glyph: '↗', icon: TrendingUp, badge: `RANK ${profile.rank}` },
-    { id: 'PROFILE', label: 'PROFILE', glyph: '👤', icon: User },
+    { id: 'HABITS', label: 'DAILY PROTOCOLS', glyph: '✓', icon: CheckSquare },
+    { id: 'TRACKING', label: 'MISSION LOG', glyph: '◷', icon: Calendar },
+    { id: 'REWARDS', label: 'WEB MARKET', glyph: '🕷', icon: Sparkles },
+    { id: 'ASCEND', label: 'ASCENSION', glyph: '↗', icon: TrendingUp, badge: `RANK ${profile.rank}` },
+    { id: 'PROFILE', label: 'HERO PROFILE', glyph: '◎', icon: User },
   ];
 
   return (
@@ -82,12 +82,12 @@ export const Sidebar: React.FC = () => {
       <div className="p-6 mt-auto border-t border-blue-900/10 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-red-500 shrink-0 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-950/80 to-[#0A0E17] border border-red-500/50 flex items-center justify-center font-bold text-xs text-red-400 shrink-0 shadow-[0_0_10px_rgba(239,68,68,0.2)] font-['Chakra_Petch']">
               {profile.rank}
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-slate-500 font-mono tracking-wider uppercase">USER ID</p>
-              <p className="text-sm text-white font-medium truncate tracking-wide">{profile.username}</p>
+              <p className="text-[10px] text-blue-400/80 font-mono tracking-wider uppercase">HERO ID</p>
+              <p className="text-sm text-white font-medium truncate tracking-wide font-['Chakra_Petch'] uppercase">{profile.username}</p>
             </div>
           </div>
 

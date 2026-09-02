@@ -45,10 +45,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
 
           <div className="hidden sm:flex items-center gap-6 lg:gap-8 font-mono">
             <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">System Status</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">System Status</p>
               <p className="text-xs text-blue-400 font-mono font-semibold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                ONLINE // AGENT_VER_2.4
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_6px_#60a5fa]" />
+                SYSTEM ONLINE
               </p>
             </div>
 
@@ -56,8 +56,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               onClick={() => setActiveTab('ASCEND')}
               className="cursor-pointer group"
             >
-              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Current Rank</p>
-              <p className="text-sm text-red-500 font-bold group-hover:text-red-400 transition-colors">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Current Rank</p>
+              <p className="text-sm text-red-500 font-bold group-hover:text-red-400 transition-colors font-['Chakra_Petch']">
                 RANK {profile.rank}
               </p>
             </div>
@@ -66,9 +66,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               onClick={() => setActiveTab('REWARDS')}
               className="cursor-pointer group"
             >
-              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Essence Balance</p>
-              <p className="text-sm text-white font-mono font-medium flex items-center gap-1 group-hover:text-blue-300 transition-colors">
-                <span className="text-blue-400">◈</span> {profile.currentEssence.toLocaleString()}
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Spidey Coins</p>
+              <p className="text-sm text-amber-300 font-mono font-bold flex items-center gap-1.5 group-hover:text-amber-200 transition-colors">
+                <span className="text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.5)]">🕷</span>
+                <span>{profile.currentEssence.toLocaleString()}</span>
               </p>
             </div>
           </div>
@@ -76,27 +77,29 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
 
         {/* Right: Level Progress & Controls */}
         <div className="flex items-center gap-4 sm:gap-6">
-          {/* Streak pill */}
+          {/* Web Streak pill */}
           <div
             onClick={() => setActiveTab('TODAY')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-950/30 border border-blue-900/30 text-xs font-mono cursor-pointer hover:border-red-500/50 transition-colors"
-            title="Daily Consistency Streak"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-950/40 to-[#0A0E17] border border-red-900/40 text-xs font-mono cursor-pointer hover:border-red-500/60 shadow-[0_0_10px_rgba(239,68,68,0.1)] transition-all"
+            title="Web Streak - Days Connected"
           >
-            <Flame className="w-3.5 h-3.5 text-red-500 fill-red-500/20" />
-            <span className="font-bold text-white">{profile.currentStreak}</span>
-            <span className="hidden sm:inline text-[10px] text-slate-400 uppercase">STREAK</span>
+            <Flame className="w-4 h-4 text-red-500 fill-red-500/30 animate-pulse" />
+            <span className="font-bold text-white font-['Chakra_Petch']">{profile.currentStreak}</span>
+            <span className="hidden sm:inline text-[10px] text-red-400/90 font-bold uppercase tracking-wider">WEB STREAK</span>
           </div>
 
           {/* Level Progress Gauge */}
-          <div className="text-right hidden md:block">
-            <p className="text-xs text-slate-400 font-medium">Level {level}</p>
-            <div className="w-40 lg:w-48 h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+          <div className="text-right hidden md:block font-mono">
+            <p className="text-xs text-slate-300 font-bold font-['Chakra_Petch'] tracking-wide">
+              LEVEL {level}
+            </p>
+            <div className="w-40 lg:w-48 h-2 bg-slate-900 border border-blue-900/30 rounded-full mt-1 overflow-hidden">
               <div
-                className="h-full bg-blue-500 shadow-[0_0_10px_#3b82f6] transition-all duration-500"
+                className="h-full bg-blue-500 shadow-[0_0_10px_#3b82f6] transition-all duration-500 rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">
+            <p className="text-[10px] text-slate-500 mt-1 uppercase">
               {currentLevelXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP
             </p>
           </div>
@@ -135,11 +138,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl bg-[#0A0E17] border border-blue-900/30 shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-blue-900/20">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white uppercase font-['Chakra_Petch'] tracking-wider">
-                      SYSTEM LOGS
+                    <span className="text-xs font-bold text-white uppercase font-['Chakra_Petch'] tracking-wider flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      SYSTEM ALERTS
                     </span>
                     {unreadCount > 0 && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-red-900/30 text-red-300 border border-red-900/40">
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-red-900/40 text-red-300 border border-red-900/50 font-bold">
                         {unreadCount} NEW
                       </span>
                     )}

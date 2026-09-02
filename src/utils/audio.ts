@@ -59,6 +59,35 @@ class SoundFX {
   }
 
   /**
+   * High-tech web zip sound effect (clean, subtle high-tension filament zip)
+   */
+  public playWebZip() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(2200, now + 0.08);
+
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.09);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
    * Rewarding mission/habit complete double-tone
    */
   public playComplete() {

@@ -17,12 +17,21 @@ export function formatDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function parseDateString(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day);
+export function parseDateString(dateStr?: string | null): Date {
+  if (!dateStr || typeof dateStr !== 'string') {
+    return new Date();
+  }
+  const cleanDateStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parts = cleanDateStr.split('-').map(Number);
+  if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
 }
 
-export function formatReadableDate(dateStr: string): string {
+export function formatReadableDate(dateStr?: string | null): string {
+  if (!dateStr) return 'Recent';
   try {
     const date = parseDateString(dateStr);
     return date.toLocaleDateString('en-US', {
@@ -31,7 +40,7 @@ export function formatReadableDate(dateStr: string): string {
       year: 'numeric',
     });
   } catch {
-    return dateStr;
+    return String(dateStr);
   }
 }
 
@@ -56,7 +65,7 @@ export function getGreeting(): string {
  * A streak day is counted if it is a PERFECT or successful day (all required missions + habits complete)
  */
 export function calculateStreaks(
-  dailyRecords: Record<string, { status: string; isPerfectDay: boolean; completedMissionIds?: string[]; completedHabitIds?: string[] }>,
+  dailyRecords: Record<string, { status: string; isPerfectDay?: boolean; isSuccessfulDay?: boolean; completedMissionIds?: string[]; completedHabitIds?: string[] }>,
   todayStr: string
 ): { currentStreak: number; longestStreak: number } {
   // Sort date keys in ascending order
@@ -71,7 +80,7 @@ export function calculateStreaks(
 
   for (const dateStr of dates) {
     const record = dailyRecords[dateStr];
-    const isSuccessful = record.isPerfectDay || record.status === 'PERFECT';
+    const isSuccessful = Boolean(record.isSuccessfulDay || record.isPerfectDay || record.status === 'PERFECT');
     const currentDate = parseDateString(dateStr);
 
     if (isSuccessful) {
@@ -107,11 +116,11 @@ export function calculateStreaks(
 
   // Check if today is completed
   const todayRecord = dailyRecords[todayStr];
-  const todayComplete = todayRecord && (todayRecord.isPerfectDay || todayRecord.status === 'PERFECT');
+  const todayComplete = todayRecord && Boolean(todayRecord.isSuccessfulDay || todayRecord.isPerfectDay || todayRecord.status === 'PERFECT');
 
   // Check if yesterday is completed
   const yesterdayRecord = dailyRecords[yesterdayStr];
-  const yesterdayComplete = yesterdayRecord && (yesterdayRecord.isPerfectDay || yesterdayRecord.status === 'PERFECT');
+  const yesterdayComplete = yesterdayRecord && Boolean(yesterdayRecord.isSuccessfulDay || yesterdayRecord.isPerfectDay || yesterdayRecord.status === 'PERFECT');
 
   if (todayComplete) {
     // Count backwards from today
@@ -119,7 +128,7 @@ export function calculateStreaks(
     while (true) {
       const dStr = formatDateString(checkDate);
       const rec = dailyRecords[dStr];
-      if (rec && (rec.isPerfectDay || rec.status === 'PERFECT')) {
+      if (rec && Boolean(rec.isSuccessfulDay || rec.isPerfectDay || rec.status === 'PERFECT')) {
         currentStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
@@ -132,7 +141,7 @@ export function calculateStreaks(
     while (true) {
       const dStr = formatDateString(checkDate);
       const rec = dailyRecords[dStr];
-      if (rec && (rec.isPerfectDay || rec.status === 'PERFECT')) {
+      if (rec && Boolean(rec.isSuccessfulDay || rec.isPerfectDay || rec.status === 'PERFECT')) {
         currentStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
