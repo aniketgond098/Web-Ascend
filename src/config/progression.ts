@@ -1,0 +1,348 @@
+import { RankTier, Reward, Mission, Habit } from '../types';
+
+export interface BaseRewardConfig {
+  missionXP: number;
+  missionEssence: number;
+  habitXP: number;
+  habitEssence: number;
+  perfectDayXP: number;
+  perfectDayEssence: number;
+  levelUpEssence: number;
+  rankUpEssence: number;
+}
+
+export const BASE_REWARDS: BaseRewardConfig = {
+  missionXP: 20,
+  missionEssence: 20,
+  habitXP: 15,
+  habitEssence: 15,
+  perfectDayXP: 100,
+  perfectDayEssence: 100,
+  levelUpEssence: 50,
+  rankUpEssence: 500,
+};
+
+export interface RankInfo {
+  tier: RankTier;
+  name: string;
+  codename: string;
+  order: number;
+  requiredDaysPerTier: number;
+  color: string;
+  accentColor: string;
+  glowColor: string;
+  description: string;
+  lore: string;
+}
+
+export const RANK_ORDER: RankTier[] = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+
+export const RANK_CONFIG: Record<RankTier, RankInfo> = {
+  E: {
+    tier: 'E',
+    name: 'Rank E',
+    codename: 'NOVICE OPERATIVE',
+    order: 0,
+    requiredDaysPerTier: 180,
+    color: '#94a3b8',
+    accentColor: '#64748b',
+    glowColor: 'rgba(148, 163, 184, 0.3)',
+    description: 'Initial system synchronization. Establishing daily foundational discipline.',
+    lore: 'The web begins as a single thread. Every master was once a beginner learning the tension of the lines.',
+  },
+  D: {
+    tier: 'D',
+    name: 'Rank D',
+    codename: 'STRAND WEAVER',
+    order: 1,
+    requiredDaysPerTier: 180,
+    color: '#38bdf8',
+    accentColor: '#0284c7',
+    glowColor: 'rgba(56, 189, 248, 0.4)',
+    description: 'Habits anchoring into muscle memory. Routine resistance reduced.',
+    lore: 'Patterns form. The neural feedback loops align with your physical willpower.',
+  },
+  C: {
+    tier: 'C',
+    name: 'Rank C',
+    codename: 'VORTEX SCOUT',
+    order: 2,
+    requiredDaysPerTier: 180,
+    color: '#22c55e',
+    accentColor: '#16a34a',
+    glowColor: 'rgba(34, 197, 94, 0.4)',
+    description: 'High day-to-day momentum. Daily missions completed with precision.',
+    lore: 'You no longer wait for motivation; momentum carries you through gravity.',
+  },
+  B: {
+    tier: 'B',
+    name: 'Rank B',
+    codename: 'ASCENDANT STRIKER',
+    order: 3,
+    requiredDaysPerTier: 180,
+    color: '#3b82f6',
+    accentColor: '#2563eb',
+    glowColor: 'rgba(59, 130, 246, 0.4)',
+    description: 'Profound discipline verified. Resilient against burnout and distractions.',
+    lore: 'Your web covers vast ground. Obstacles become mere anchor points for higher leaps.',
+  },
+  A: {
+    tier: 'A',
+    name: 'Rank A',
+    codename: 'APEX SENTINEL',
+    order: 4,
+    requiredDaysPerTier: 180,
+    color: '#f59e0b',
+    accentColor: '#d97706',
+    glowColor: 'rgba(245, 158, 11, 0.4)',
+    description: 'Master of daily execution. Consistency transcends circumstance.',
+    lore: 'Few reach this elevation. Your discipline is an active force field in daily life.',
+  },
+  S: {
+    tier: 'S',
+    name: 'Rank S',
+    codename: 'NEXUS WEAVER',
+    order: 5,
+    requiredDaysPerTier: 180,
+    color: '#ef4444',
+    accentColor: '#dc2626',
+    glowColor: 'rgba(239, 68, 68, 0.5)',
+    description: 'Legendary discipline. Elite focus across all life domains.',
+    lore: 'The apex of individual fortitude. You dictate your outcomes with absolute certainty.',
+  },
+  SS: {
+    tier: 'SS',
+    name: 'Rank SS',
+    codename: 'CHRONO ASCENDANT',
+    order: 6,
+    requiredDaysPerTier: 180,
+    color: '#ec4899',
+    accentColor: '#db2777',
+    glowColor: 'rgba(236, 72, 153, 0.5)',
+    description: 'Transcendent mastery. Years of unwavering daily excellence.',
+    lore: 'Time itself bends to your routines. Unshakeable flow state in every mission.',
+  },
+  SSS: {
+    tier: 'SSS',
+    name: 'Rank SSS',
+    codename: 'SUPREME ARCHITECT',
+    order: 7,
+    requiredDaysPerTier: 180,
+    color: '#a855f7',
+    accentColor: '#9333ea',
+    glowColor: 'rgba(168, 85, 247, 0.6)',
+    description: 'God-tier consistency. The ultimate state of personal productivity.',
+    lore: 'You are the architect of your universe. The web is fully illuminated.',
+  },
+};
+
+/**
+ * Calculates XP threshold required to complete a given level.
+ * Level 1 -> 150 XP
+ * Level 2 -> 220 XP
+ * Level 5 -> ~450 XP
+ * Level 24 -> ~2,800 XP
+ */
+export function getXPRequiredForLevel(level: number): number {
+  if (level <= 1) return 150;
+  return Math.floor(120 * Math.pow(level, 1.15) + 30);
+}
+
+/**
+ * Calculates current level and progress from total XP.
+ */
+export function getLevelProgress(totalXP: number): {
+  level: number;
+  currentLevelXP: number;
+  nextLevelXP: number;
+  progressPercent: number;
+} {
+  let level = 1;
+  let remainingXP = Math.max(0, totalXP);
+  
+  while (true) {
+    const needed = getXPRequiredForLevel(level);
+    if (remainingXP < needed) {
+      const progressPercent = Math.min(100, Math.round((remainingXP / needed) * 100));
+      return {
+        level,
+        currentLevelXP: remainingXP,
+        nextLevelXP: needed,
+        progressPercent,
+      };
+    }
+    remainingXP -= needed;
+    level++;
+  }
+}
+
+/**
+ * Calculates rank progression from total consistency days.
+ */
+export function getRankProgress(consistencyDaysCompleted: number): {
+  currentRank: RankTier;
+  nextRank: RankTier | null;
+  daysInCurrentRank: number;
+  daysNeededForNextRank: number;
+  daysRemaining: number;
+  progressPercent: number;
+  isMaxRank: boolean;
+} {
+  const daysPerTier = 180;
+  const currentTierIndex = Math.min(
+    RANK_ORDER.length - 1,
+    Math.floor(consistencyDaysCompleted / daysPerTier)
+  );
+  
+  const currentRank = RANK_ORDER[currentTierIndex];
+  const isMaxRank = currentTierIndex >= RANK_ORDER.length - 1;
+  const nextRank = isMaxRank ? null : RANK_ORDER[currentTierIndex + 1];
+  
+  const daysInCurrentRank = isMaxRank 
+    ? daysPerTier 
+    : consistencyDaysCompleted % daysPerTier;
+    
+  const daysNeededForNextRank = daysPerTier;
+  const daysRemaining = isMaxRank ? 0 : daysNeededForNextRank - daysInCurrentRank;
+  const progressPercent = isMaxRank 
+    ? 100 
+    : Math.min(100, Math.round((daysInCurrentRank / daysNeededForNextRank) * 100));
+
+  return {
+    currentRank,
+    nextRank,
+    daysInCurrentRank,
+    daysNeededForNextRank,
+    daysRemaining,
+    progressPercent,
+    isMaxRank,
+  };
+}
+
+export const DEFAULT_REWARDS: Omit<Reward, 'id' | 'createdAt'>[] = [
+  {
+    name: '30 MIN GAMING',
+    description: 'Guilt-free gaming session on PC/Console.',
+    essenceCost: 100,
+    icon: '🎮',
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: 'FAVORITE SNACK',
+    description: 'A delicious high-quality snack of your choice.',
+    essenceCost: 150,
+    icon: '🍫',
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: 'MOVIE NIGHT',
+    description: 'Feature-length film with zero interruptions.',
+    essenceCost: 250,
+    icon: '🎬',
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: '1 HOUR GAMING',
+    description: 'Extended deep gaming session after key missions.',
+    essenceCost: 300,
+    icon: '🕹️',
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: 'FAVORITE FOOD',
+    description: 'Order in or cook your favorite luxury meal.',
+    essenceCost: 500,
+    icon: '🍕',
+    isActive: true,
+    isDefault: true,
+  },
+  {
+    name: 'LAZY EVENING',
+    description: 'Zero obligations. Complete freedom to unwind.',
+    essenceCost: 750,
+    icon: '😴',
+    isActive: true,
+    isDefault: true,
+  },
+];
+
+export const STARTER_MISSIONS: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  {
+    title: 'Complete Core Study / Work Block',
+    description: 'Focus for 90 minutes with zero distractions or social media.',
+    priority: 'HIGH',
+    xpReward: 30,
+    essenceReward: 25,
+    isRequired: true,
+    isActive: true,
+  },
+  {
+    title: 'Physical Workout / Movement',
+    description: 'Weight lifting, calisthenics, running, or high intensity training.',
+    priority: 'HIGH',
+    xpReward: 25,
+    essenceReward: 20,
+    isRequired: true,
+    isActive: true,
+  },
+  {
+    title: 'Deep Programming / Skill Session',
+    description: 'Build projects or solve challenging engineering problems.',
+    priority: 'MEDIUM',
+    xpReward: 25,
+    essenceReward: 20,
+    isRequired: true,
+    isActive: true,
+  },
+  {
+    title: 'Organize Workspace & Plan Tomorrow',
+    description: 'Clean physical desk and outline next day top 3 objectives.',
+    priority: 'LOW',
+    xpReward: 15,
+    essenceReward: 10,
+    isRequired: false,
+    isActive: true,
+  },
+];
+
+export const STARTER_HABITS: Omit<Habit, 'id' | 'createdAt' | 'currentStreak' | 'longestStreak'>[] = [
+  {
+    name: 'Wake Up Early',
+    description: 'Rise on first alarm without snoozing.',
+    xpReward: 15,
+    essenceReward: 15,
+    isActive: true,
+  },
+  {
+    name: 'Daily Hydration (2.5L+)',
+    description: 'Drink optimal clean water throughout the day.',
+    xpReward: 10,
+    essenceReward: 10,
+    isActive: true,
+  },
+  {
+    name: 'Daily Reading (20 mins)',
+    description: 'Read non-fiction, philosophy, or technical documentation.',
+    xpReward: 15,
+    essenceReward: 15,
+    isActive: true,
+  },
+  {
+    name: 'Mindfulness & Meditation',
+    description: '10 minutes of quiet breathwork or mental centering.',
+    xpReward: 15,
+    essenceReward: 10,
+    isActive: true,
+  },
+  {
+    name: 'Sleep on Time',
+    description: 'Screens off by target hour for 8 hours of restorative rest.',
+    xpReward: 20,
+    essenceReward: 15,
+    isActive: true,
+  },
+];
