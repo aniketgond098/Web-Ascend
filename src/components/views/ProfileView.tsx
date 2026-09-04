@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Shield,
@@ -44,6 +44,7 @@ export const ProfileView: React.FC = () => {
     purchases,
     toggleSound,
     resetAllData,
+    reinitializeOperative,
     resetTestProgression,
     exportData,
     importData,
@@ -56,6 +57,13 @@ export const ProfileView: React.FC = () => {
   const [showImportBox, setShowImportBox] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  useEffect(() => {
+    if (profile.username) {
+      setUsername(profile.username);
+    }
+  }, [profile.username]);
 
   const rankInfo = RANK_CONFIG[profile.rank];
 
@@ -94,10 +102,16 @@ export const ProfileView: React.FC = () => {
     setIsResetModalOpen(true);
   };
 
-  const handleConfirmReset = () => {
-    resetTestProgression();
-    setIsResetModalOpen(false);
-    addNotification('OPERATIVE RE-INITIALIZED', 'Operative reset to factory specs.', 'SYSTEM');
+  const handleConfirmReset = async () => {
+    setIsResetting(true);
+    try {
+      await reinitializeOperative();
+      setIsResetModalOpen(false);
+    } catch (e) {
+      console.error('Re-initialize error:', e);
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -492,13 +506,13 @@ export const ProfileView: React.FC = () => {
       {/* Confirmation Modal for Reset */}
       <ConfirmModal
         isOpen={isResetModalOpen}
-        onClose={() => setIsResetModalOpen(false)}
+        onClose={() => !isResetting && setIsResetModalOpen(false)}
         onConfirm={handleConfirmReset}
         title="FACTORY SPEC RE-INITIALIZATION"
         subtitle="OPERATIVE DATA SYSTEM OVERRIDE"
         itemName="All Active Progress & Directives"
-        message="This will reset your operative back to factory specs: Rank E (0/180 successful days), Level 1, 0 XP, 0 Spidey Coins, and 0 Streak. Are you certain you want to proceed?"
-        confirmText="CONFIRM RESET"
+        message="This will completely wipe your directives, habits, streaks, completions, and transaction ledger, resetting your operative back to factory specs: Rank E (0/180 successful days), Level 1, 0 XP, 0 Spidey Coins, and 0 Streak. Are you certain you want to proceed?"
+        confirmText={isResetting ? "RE-INITIALIZING..." : "CONFIRM RESET"}
         cancelText="ABORT"
         isDestructive={true}
         icon="alert"

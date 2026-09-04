@@ -216,19 +216,53 @@ export const supabaseService = {
   },
 
   /**
-   * Fetch all user data from cloud database
+   * Fetch all user data from cloud database in parallel (batches independent queries)
    */
   async fetchAllUserData(userId: string, todayDate: string): Promise<CloudDataPayload> {
-    // 1. Fetch Profile
-    let { data: profileRow } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
+    // 1. Fetch all independent tables concurrently in a single network round-trip batch
+    const [
+      profileResult,
+      levelResult,
+      rankResult,
+      missionsResult,
+      habitsResult,
+      dailyProgressResult,
+      missionCompletionsResult,
+      habitCompletionsResult,
+      xpTxResult,
+      coinTxResult,
+      rewardsResult,
+      purchasesResult,
+      notifResult,
+    ] = await Promise.all([
+      supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('level_progression').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('rank_progression').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('missions').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+      supabase.from('habits').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+      supabase.from('daily_progress').select('*').eq('user_id', userId),
+      supabase.from('mission_completions').select('*').eq('user_id', userId),
+      supabase.from('habit_completions').select('*').eq('user_id', userId),
+      supabase.from('xp_transactions').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+      supabase.from('spidey_coin_transactions').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+      supabase.from('rewards').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+      supabase.from('reward_purchases').select('*, rewards(name)').eq('user_id', userId).order('purchased_at', { ascending: false }),
+      supabase.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
+    ]);
+
+    let profileRow = profileResult.data;
+
+    // Check auth metadata for fallback username
+    let authUsername = '';
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      authUsername = sessionData?.session?.user?.user_metadata?.username || '';
+    } catch {}
 
     if (!profileRow) {
       try {
-        await this.initializeNewUser(userId, 'OPERATIVE');
+        const initialName = authUsername || 'OPERATIVE';
+        await this.initializeNewUser(userId, initialName);
         const { data: p } = await supabase
           .from('profiles')
           .select('*')
@@ -240,72 +274,16 @@ export const supabaseService = {
       }
     }
 
-    // 2. Fetch Level Progression
-    const { data: levelRow } = await supabase
-      .from('level_progression')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    // 3. Fetch Rank Progression
-    const { data: rankRow } = await supabase
-      .from('rank_progression')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    // 4. Fetch Missions
-    let { data: missionsRows } = await supabase
-      .from('missions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
-
-    // 5. Fetch Habits
-    let { data: habitsRows } = await supabase
-      .from('habits')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
-
-    // 6. Fetch Daily Progress
-    const { data: dailyProgressRows } = await supabase
-      .from('daily_progress')
-      .select('*')
-      .eq('user_id', userId);
-
-    // 7. Fetch Mission Completions
-    const { data: missionCompletionsRows } = await supabase
-      .from('mission_completions')
-      .select('*')
-      .eq('user_id', userId);
-
-    // 8. Fetch Habit Completions
-    const { data: habitCompletionsRows } = await supabase
-      .from('habit_completions')
-      .select('*')
-      .eq('user_id', userId);
-
-    // 9. Fetch XP Transactions
-    const { data: xpTxRows } = await supabase
-      .from('xp_transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    // 10. Fetch Spidey Coin Transactions
-    const { data: coinTxRows } = await supabase
-      .from('spidey_coin_transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    // 11. Fetch Rewards
-    let { data: rewardsRows } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    const levelRow = levelResult.data;
+    const rankRow = rankResult.data;
+    const missionsRows = missionsResult.data;
+    const habitsRows = habitsResult.data;
+    const dailyProgressRows = dailyProgressResult.data;
+    const missionCompletionsRows = missionCompletionsResult.data;
+    const habitCompletionsRows = habitCompletionsResult.data;
+    const xpTxRows = xpTxResult.data;
+    const coinTxRows = coinTxResult.data;
+    let rewardsRows = rewardsResult.data;
 
     // Auto-seed rewards if empty
     if (!rewardsRows || rewardsRows.length === 0) {
@@ -327,20 +305,8 @@ export const supabaseService = {
       }
     }
 
-    // 12. Fetch Reward Purchases
-    const { data: purchasesRows } = await supabase
-      .from('reward_purchases')
-      .select('*, rewards(name)')
-      .eq('user_id', userId)
-      .order('purchased_at', { ascending: false });
-
-    // 13. Fetch Notifications
-    const { data: notifRows } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const purchasesRows = purchasesResult.data;
+    const notifRows = notifResult.data;
 
     // Transform Missions
     const missions: Mission[] = (missionsRows || []).map((m) => ({
@@ -490,8 +456,13 @@ export const supabaseService = {
     }));
 
     // Build UserProfile
+    let resolvedUsername = profileRow?.username || authUsername || 'OPERATIVE';
+    if ((!resolvedUsername || resolvedUsername === 'OPERATIVE' || resolvedUsername === 'Operative') && authUsername && authUsername !== 'OPERATIVE' && authUsername !== 'Operative') {
+      resolvedUsername = authUsername;
+    }
+
     const profile: UserProfile = {
-      username: profileRow?.username || 'OPERATIVE',
+      username: resolvedUsername,
       level: Math.max(computedLevel, levelRow?.current_level || 1),
       rank: (rankRow?.current_rank as RankTier) || rankProg.currentRank,
       successfulDaysForCurrentRank: rankProg.successfulDaysForCurrentRank,
@@ -1085,10 +1056,96 @@ export const supabaseService = {
    */
   async updateProfile(userId: string, updates: { username?: string; sound_enabled?: boolean }): Promise<void> {
     const payload: any = { updated_at: new Date().toISOString() };
-    if (updates.username !== undefined) payload.username = updates.username;
+    if (updates.username !== undefined) payload.username = updates.username.trim();
     if (updates.sound_enabled !== undefined) payload.sound_enabled = updates.sound_enabled;
 
-    await supabase.from('profiles').update(payload).eq('user_id', userId);
+    await supabase.from('profiles').upsert({
+      user_id: userId,
+      ...payload,
+    }, { onConflict: 'user_id' });
+
+    if (updates.username && updates.username.trim()) {
+      try {
+        await supabase.auth.updateUser({
+          data: { username: updates.username.trim() },
+        });
+      } catch (e) {
+        console.warn('Auth user metadata update notice:', e);
+      }
+    }
+  },
+
+  /**
+   * Factory Reset / Re-initialization for user data in Supabase cloud database
+   */
+  async reinitializeUser(userId: string, username: string = 'OPERATIVE'): Promise<void> {
+    const cleanUsername = username.trim() || 'OPERATIVE';
+
+    // 1. Delete all completion records
+    try {
+      await supabase.from('mission_completions').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe mission_completions notice:', e);
+    }
+
+    try {
+      await supabase.from('habit_completions').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe habit_completions notice:', e);
+    }
+
+    // 2. Delete all ledger transactions and purchases
+    try {
+      await supabase.from('xp_transactions').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe xp_transactions notice:', e);
+    }
+
+    try {
+      await supabase.from('spidey_coin_transactions').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe spidey_coin_transactions notice:', e);
+    }
+
+    try {
+      await supabase.from('reward_purchases').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe reward_purchases notice:', e);
+    }
+
+    try {
+      await supabase.from('daily_progress').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe daily_progress notice:', e);
+    }
+
+    try {
+      await supabase.from('notifications').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe notifications notice:', e);
+    }
+
+    // 3. Clear user-created custom missions, habits, rewards
+    try {
+      await supabase.from('missions').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe missions notice:', e);
+    }
+
+    try {
+      await supabase.from('habits').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe habits notice:', e);
+    }
+
+    try {
+      await supabase.from('rewards').delete().eq('user_id', userId);
+    } catch (e) {
+      console.warn('Wipe rewards notice:', e);
+    }
+
+    // 4. Re-seed clean starter entities and progression
+    await this.initializeNewUser(userId, cleanUsername);
   },
 
   /**

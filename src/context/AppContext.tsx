@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   UserProfile,
+  RankTier,
   Mission,
   Habit,
   DailyRecord,
@@ -113,6 +114,7 @@ interface AppContextType {
   initializeProfile: (username: string, startPreset?: boolean) => void;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   toggleSound: () => void;
+  addNotification: (title: string, message: string, type: AppNotification['type']) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   clearNotifications: () => Promise<void>;
   refreshCloudData: () => Promise<void>;
@@ -120,6 +122,7 @@ interface AppContextType {
   setUserAndSync: (newUser: any) => Promise<void>;
 
   // Simulation & Testing
+  reinitializeOperative: () => Promise<void>;
   resetTestProgression: () => void;
   simulateSuccessfulDay: () => void;
   simulateTierAscension: () => void;
@@ -131,31 +134,40 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const createDefaultProfile = (today: string, username: string = 'OPERATIVE'): UserProfile => ({
-  username,
-  level: 1,
-  rank: 'E',
-  successfulDaysForCurrentRank: 0,
-  requiredSuccessfulDaysForCurrentRank: 180,
-  totalSuccessfulDays: 0,
-  consistencyDaysCompleted: 0,
-  totalXP: 0,
-  currentEssence: 0,
-  totalEssenceEarned: 0,
-  currentStreak: 0,
-  longestStreak: 0,
-  soundEnabled: true,
-  initialized: true,
-  joinedDate: today,
-  lastActiveDate: today,
-  rpgStats: {
-    discipline: 20,
-    focus: 20,
-    strength: 20,
-    intelligence: 20,
-    consistency: 20,
-  },
-});
+const createDefaultProfile = (today: string, username?: string): UserProfile => {
+  let initialName = username;
+  if (!initialName) {
+    try {
+      const savedName = localStorage.getItem('web_ascend_custom_username');
+      if (savedName && savedName.trim()) initialName = savedName.trim();
+    } catch {}
+  }
+  return {
+    username: initialName || 'OPERATIVE',
+    level: 1,
+    rank: 'E',
+    successfulDaysForCurrentRank: 0,
+    requiredSuccessfulDaysForCurrentRank: 180,
+    totalSuccessfulDays: 0,
+    consistencyDaysCompleted: 0,
+    totalXP: 0,
+    currentEssence: 0,
+    totalEssenceEarned: 0,
+    currentStreak: 0,
+    longestStreak: 0,
+    soundEnabled: true,
+    initialized: true,
+    joinedDate: today,
+    lastActiveDate: today,
+    rpgStats: {
+      discipline: 20,
+      focus: 20,
+      strength: 20,
+      intelligence: 20,
+      consistency: 20,
+    },
+  };
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const todayDate = getTodayDateString();
@@ -179,7 +191,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [profile, setProfile] = useState<UserProfile>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const savedCustomUsername = localStorage.getItem('web_ascend_custom_username');
+        if (savedCustomUsername && savedCustomUsername.trim() && (!parsed.username || parsed.username === 'OPERATIVE' || parsed.username === 'Operative')) {
+          parsed.username = savedCustomUsername.trim();
+        }
+        return parsed;
+      }
     } catch {}
     return createDefaultProfile(todayDate);
   });
@@ -270,11 +289,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<ActiveTab>('TODAY');
   const [celebration, setCelebration] = useState<CelebrationState>({ type: null });
 
-  // Sync state to localStorage when in local/offline mode
+  // Sync state to localStorage (profile and chosen username are always saved to prevent loss)
   useEffect(() => {
-    if (!user) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+      if (profile.username && profile.username !== 'OPERATIVE' && profile.username !== 'Operative') {
+        localStorage.setItem('web_ascend_custom_username', profile.username);
+      }
+      if (!user) {
         localStorage.setItem(STORAGE_KEYS.MISSIONS, JSON.stringify(missions));
         localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
         localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(dailyRecords));
@@ -283,9 +305,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(rewards));
         localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
         localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
-      } catch (e) {
-        console.warn('localStorage save warning:', e);
       }
+    } catch (e) {
+      console.warn('localStorage save warning:', e);
     }
   }, [user, profile, missions, habits, dailyRecords, xpTransactions, essenceTransactions, rewards, purchases, notifications]);
 
@@ -352,7 +374,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSyncStatus('SYNCING');
     try {
       const data = await supabaseService.fetchAllUserData(userId, todayDate);
-      setProfile(data.profile);
+
+      // Preserve custom codename if cloud profile returned generic default 'OPERATIVE'
+      let finalUsername = data.profile.username;
+      const localCustomName = localStorage.getItem('web_ascend_custom_username');
+      if (
+        (!finalUsername || finalUsername === 'OPERATIVE' || finalUsername === 'Operative') &&
+        ((profile.username && profile.username !== 'OPERATIVE' && profile.username !== 'Operative') ||
+         (localCustomName && localCustomName !== 'OPERATIVE' && localCustomName !== 'Operative'))
+      ) {
+        finalUsername = (profile.username && profile.username !== 'OPERATIVE' && profile.username !== 'Operative')
+          ? profile.username
+          : localCustomName!;
+        
+        supabaseService.updateProfile(userId, { username: finalUsername }).catch(console.warn);
+      }
+
+      const mergedProfile: UserProfile = {
+        ...data.profile,
+        username: finalUsername || 'OPERATIVE',
+      };
+
+      setProfile(mergedProfile);
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(mergedProfile));
+        if (finalUsername && finalUsername !== 'OPERATIVE' && finalUsername !== 'Operative') {
+          localStorage.setItem('web_ascend_custom_username', finalUsername);
+        }
+      } catch {}
+
       setMissions(data.missions);
       setHabits(data.habits);
       setDailyRecords(data.dailyRecords);
@@ -1303,7 +1353,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {
       soundFX.playBlip();
-      setProfile((prev) => ({ ...prev, ...updates }));
+      setProfile((prev) => {
+        const next = { ...prev, ...updates };
+        try {
+          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next));
+          if (next.username && next.username !== 'OPERATIVE' && next.username !== 'Operative') {
+            localStorage.setItem('web_ascend_custom_username', next.username);
+          }
+        } catch {}
+        return next;
+      });
       if (user) {
         await supabaseService.updateProfile(user.id, {
           username: updates.username,
@@ -1316,10 +1375,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const initializeProfile = useCallback(
     (username: string) => {
+      const cleanName = username.trim() || 'OPERATIVE';
       localStorage.setItem('web_ascend_onboarding_completed', 'true');
-      setProfile((prev) => ({ ...prev, username }));
+      if (cleanName !== 'OPERATIVE' && cleanName !== 'Operative') {
+        localStorage.setItem('web_ascend_custom_username', cleanName);
+      }
+      setProfile((prev) => {
+        const next = { ...prev, username: cleanName };
+        try {
+          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       if (user) {
-        supabaseService.updateProfile(user.id, { username });
+        supabaseService.updateProfile(user.id, { username: cleanName }).catch(console.warn);
       }
     },
     [user]
@@ -1363,10 +1432,120 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, loadCloudData]);
 
+  // Complete Operative Factory Reset
+  const reinitializeOperative = useCallback(async () => {
+    soundFX.playRankUp();
+    // Preserve custom codename so user does not get reverted back to generic 'OPERATIVE'
+    const preservedUsername = (profile.username && profile.username !== 'OPERATIVE' && profile.username !== 'Operative')
+      ? profile.username
+      : localStorage.getItem('web_ascend_custom_username') || 'OPERATIVE';
+
+    const cleanProfile = createDefaultProfile(todayDate, preservedUsername);
+
+    const cleanMissions: Mission[] = STARTER_MISSIONS.map((m, idx) => ({
+      ...m,
+      id: `m_${idx + 1}`,
+      createdAt: Date.now() - (4 - idx) * 86400000,
+      updatedAt: Date.now(),
+    }));
+
+    const cleanHabits: Habit[] = STARTER_HABITS.map((h, idx) => ({
+      ...h,
+      id: `h_${idx + 1}`,
+      currentStreak: 0,
+      longestStreak: 0,
+      createdAt: Date.now(),
+    }));
+
+    const cleanDailyRecords: Record<string, DailyRecord> = {
+      [todayDate]: {
+        date: todayDate,
+        completedMissionIds: [],
+        completedHabitIds: [],
+        isSuccessfulDay: false,
+        isPerfectDay: false,
+        xpEarned: 0,
+        essenceEarned: 0,
+        totalRequiredMissions: cleanMissions.filter((m) => m.isRequired && m.isActive).length,
+        totalActiveHabits: cleanHabits.filter((h) => h.isActive).length,
+        status: 'IN_PROGRESS',
+      },
+    };
+
+    const cleanRewards: Reward[] = DEFAULT_REWARDS.map((r, idx) => ({
+      ...r,
+      id: `r_${idx + 1}`,
+      createdAt: Date.now() - idx * 86400000,
+    }));
+
+    const cleanNotifs: AppNotification[] = [
+      {
+        id: `notif_${Date.now()}`,
+        title: 'OPERATIVE RE-INITIALIZED',
+        message: 'Directives, protocols, ledger, and streaks have been reset to factory specifications.',
+        type: 'SYSTEM',
+        timestamp: Date.now(),
+        read: false,
+      },
+    ];
+
+    // 1. Update React states immediately
+    setProfile(cleanProfile);
+    setMissions(cleanMissions);
+    setHabits(cleanHabits);
+    setDailyRecords(cleanDailyRecords);
+    setXpTransactions([]);
+    setEssenceTransactions([]);
+    setRewards(cleanRewards);
+    setPurchases([]);
+    setNotifications(cleanNotifs);
+
+    // 2. Overwrite all local storage keys completely
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(cleanProfile));
+      localStorage.setItem(STORAGE_KEYS.MISSIONS, JSON.stringify(cleanMissions));
+      localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(cleanHabits));
+      localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(cleanDailyRecords));
+      localStorage.setItem(STORAGE_KEYS.XP_TRANSACTIONS, JSON.stringify([]));
+      localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify([]));
+      localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(cleanRewards));
+      localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify([]));
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cleanNotifs));
+    } catch (e) {
+      console.warn('LocalStorage wipe warning:', e);
+    }
+
+    // 3. If connected to Supabase cloud, wipe cloud tables and re-populate
+    if (user) {
+      setDataLoading(true);
+      try {
+        await supabaseService.reinitializeUser(user.id, preservedUsername);
+        await loadCloudData(user.id);
+      } catch (err) {
+        console.error('Failed to reinitialize cloud user in Supabase:', err);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+  }, [todayDate, profile.username, user, loadCloudData]);
+
   // Simulation helpers
   const resetTestProgression = useCallback(() => {
-    setProfile(createDefaultProfile(todayDate));
-  }, [todayDate]);
+    setProfile((prev) => {
+      const next = {
+        ...prev,
+        rank: 'E' as RankTier,
+        successfulDaysForCurrentRank: 0,
+        requiredSuccessfulDaysForCurrentRank: 180,
+        totalSuccessfulDays: 0,
+        consistencyDaysCompleted: 0,
+      };
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const simulateSuccessfulDay = useCallback(() => {
     soundFX.playPerfectDay();
@@ -1490,11 +1669,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       initializeProfile,
       updateProfile,
       toggleSound,
+      addNotification,
       markNotificationRead,
       clearNotifications,
       refreshCloudData,
       reloadAuthAndConfig,
       setUserAndSync,
+      reinitializeOperative,
       resetTestProgression,
       simulateSuccessfulDay,
       simulateTierAscension,
@@ -1545,11 +1726,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       initializeProfile,
       updateProfile,
       toggleSound,
+      addNotification,
       markNotificationRead,
       clearNotifications,
       refreshCloudData,
       reloadAuthAndConfig,
       setUserAndSync,
+      reinitializeOperative,
       resetTestProgression,
       simulateSuccessfulDay,
       simulateTierAscension,
