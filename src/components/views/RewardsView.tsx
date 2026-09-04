@@ -20,6 +20,7 @@ import { Reward } from '../../types';
 import { formatTimeHUD, formatReadableDate } from '../../utils/date';
 import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
 import { SpiderIcon } from '../ui/SpiderIcon';
+import { SpideyMarketBadge, resolveSpideyGear } from '../ui/SpideyMarketBadge';
 
 export const RewardsView: React.FC = () => {
   const {
@@ -179,56 +180,75 @@ export const RewardsView: React.FC = () => {
             {filteredRewards.map((reward) => {
               const canAfford = profile.currentEssence >= reward.essenceCost;
               const isPulsing = purchasePulseId === reward.id;
+              const gear = resolveSpideyGear(reward.icon);
 
               return (
                 <div
                   key={reward.id}
                   className={`
-                    p-5 rounded-2xl flex flex-col justify-between transition-all border relative overflow-hidden
+                    p-5 rounded-2xl flex flex-col justify-between transition-all border relative overflow-hidden group
                     ${
                       isPulsing
                         ? 'bg-amber-950/30 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.3)] scale-[1.02]'
                         : canAfford
-                        ? 'bg-[#0F141F] border-blue-900/40 shadow-[0_0_15px_rgba(37,99,235,0.06)] hover:border-blue-500/50'
-                        : 'bg-[#0A0E17] border-slate-800/80 opacity-80'
+                        ? 'bg-[#0B0F19] border-blue-900/40 shadow-[0_0_15px_rgba(37,99,235,0.06)] hover:border-red-500/50 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                        : 'bg-[#080C14] border-slate-800/80 opacity-80'
                     }
                   `}
                 >
+                  {/* Subtle Web Cyber Accent Glow */}
+                  <div
+                    className="absolute -top-12 -right-12 w-32 h-32 rounded-full pointer-events-none blur-3xl opacity-15 transition-opacity group-hover:opacity-30"
+                    style={{ backgroundColor: gear.color }}
+                  />
+
                   {/* Purchase feedback pulse overlay */}
                   {isPulsing && (
-                    <div className="absolute inset-0 bg-amber-500/10 flex items-center justify-center pointer-events-none z-20">
-                      <span className="text-xs font-mono font-bold text-amber-300 px-3 py-1 bg-[#0A0E17] border border-amber-500 rounded-full shadow-lg animate-bounce">
-                        ✓ REWARD UNLOCKED // SPIDEY COINS CHARGED
+                    <div className="absolute inset-0 bg-amber-500/15 backdrop-blur-[2px] flex items-center justify-center pointer-events-none z-20">
+                      <span className="text-xs font-mono font-bold text-amber-300 px-3.5 py-1.5 bg-[#0A0E17] border border-amber-400 rounded-xl shadow-xl flex items-center gap-2 animate-bounce">
+                        <SpiderIcon size={14} color="#F59E0B" />
+                        <span>✓ UPGRADE ACQUIRED // COINS CHARGED</span>
                       </span>
                     </div>
                   )}
 
                   <div>
-                    {/* Top: Icon & Price */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="text-3xl p-2.5 rounded-xl bg-[#0A0E17] border border-blue-900/30">
-                        {reward.icon}
-                      </div>
+                    {/* Top: Spider-Man Tech Badge & Spidey Coin Price */}
+                    <div className="flex items-start justify-between mb-3.5">
+                      <SpideyMarketBadge iconKey={reward.icon} size="md" />
 
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0A0E17] border border-amber-500/40 shadow-sm">
-                        <SpideyCoinIcon size={14} />
-                        <span className="text-sm font-bold text-amber-300 font-mono">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#070A10] border border-amber-500/40 shadow-sm group-hover:border-amber-400/80 transition-colors">
+                        <SpideyCoinIcon size={15} />
+                        <span className="text-sm font-bold text-amber-300 font-mono tracking-tight">
                           {reward.essenceCost.toLocaleString()}
+                        </span>
+                        <span className="text-[9px] font-mono text-amber-400/70 font-bold hidden sm:inline">
+                          COINS
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-bold text-white font-['Chakra_Petch'] tracking-wide">
+                    {/* Tech Classification and Name */}
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span
+                          className="text-[9px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-black/60 border"
+                          style={{ color: gear.color, borderColor: `${gear.color}40` }}
+                        >
+                          {gear.techLabel}
+                        </span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-400 border border-blue-900/40 uppercase">
+                          {reward.category}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-bold text-white font-['Chakra_Petch'] tracking-wide group-hover:text-red-300 transition-colors">
                         {reward.name}
                       </h3>
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-400 border border-blue-900/40 uppercase">
-                        {reward.category}
-                      </span>
                     </div>
 
                     {reward.description && (
-                      <p className="text-xs text-slate-400 font-sans mb-4 line-clamp-2">
+                      <p className="text-xs text-slate-400 font-sans mb-4 line-clamp-2 leading-relaxed">
                         {reward.description}
                       </p>
                     )}
