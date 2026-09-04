@@ -372,9 +372,11 @@ export const RewardsView: React.FC = () => {
                       </div>
 
                       <div>
-                        <p className="font-bold text-white tracking-wide">{tx.reason}</p>
+                        <p className="font-bold text-white tracking-wide">
+                          {tx.description || (tx as any).reason || 'Web Coin Transaction'}
+                        </p>
                         <p className="text-[10px] text-slate-500">
-                          {formatReadableDate(tx.timestamp.split('T')[0])} • {formatTimeHUD(tx.timestamp)}
+                          {formatReadableDate(tx.date || tx.timestamp)} • {formatTimeHUD(tx.timestamp)}
                         </p>
                       </div>
                     </div>

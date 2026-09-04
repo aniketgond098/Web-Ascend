@@ -264,7 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [rewards, setRewards] = useState<Reward[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.REWARDS);
-      if (saved) return JSON.parse(saved);
+      if (saved !== null) return JSON.parse(saved);
     } catch {}
     return DEFAULT_REWARDS.map((r, idx) => ({
       ...r,
@@ -275,41 +275,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [purchases, setPurchases] = useState<RewardPurchase[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PURCHASES);
-      if (saved) return JSON.parse(saved);
+      if (saved !== null) return JSON.parse(saved);
     } catch {}
     return [];
   });
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-      if (saved) return JSON.parse(saved);
+      if (saved !== null) return JSON.parse(saved);
     } catch {}
     return [];
   });
   const [activeTab, setActiveTab] = useState<ActiveTab>('TODAY');
   const [celebration, setCelebration] = useState<CelebrationState>({ type: null });
 
-  // Sync state to localStorage (profile and chosen username are always saved to prevent loss)
+  // Sync state to localStorage (always save local cache so page reloads or tab switches remain in sync)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
       if (profile.username && profile.username !== 'OPERATIVE' && profile.username !== 'Operative') {
         localStorage.setItem('web_ascend_custom_username', profile.username);
       }
-      if (!user) {
-        localStorage.setItem(STORAGE_KEYS.MISSIONS, JSON.stringify(missions));
-        localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
-        localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(dailyRecords));
-        localStorage.setItem(STORAGE_KEYS.XP_TRANSACTIONS, JSON.stringify(xpTransactions));
-        localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify(essenceTransactions));
-        localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(rewards));
-        localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
-        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
-      }
+      localStorage.setItem(STORAGE_KEYS.MISSIONS, JSON.stringify(missions));
+      localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
+      localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(dailyRecords));
+      localStorage.setItem(STORAGE_KEYS.XP_TRANSACTIONS, JSON.stringify(xpTransactions));
+      localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify(essenceTransactions));
+      localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(rewards));
+      localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
     } catch (e) {
       console.warn('localStorage save warning:', e);
     }
-  }, [user, profile, missions, habits, dailyRecords, xpTransactions, essenceTransactions, rewards, purchases, notifications]);
+  }, [profile, missions, habits, dailyRecords, xpTransactions, essenceTransactions, rewards, purchases, notifications]);
 
   // Check online status
   useEffect(() => {
@@ -1334,13 +1332,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (id: string) => {
       soundFX.playBlip();
       const target = rewards.find((r) => r.id === id);
-      setRewards((prev) => prev.filter((r) => r.id !== id));
+      const nextRewards = rewards.filter((r) => r.id !== id);
+      setRewards(nextRewards);
+      try {
+        localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(nextRewards));
+      } catch {}
       if (target) {
         addNotification('REWARD REMOVED', `"${target.name}" removed from market roster.`, 'SYSTEM');
       }
       if (user) {
         try {
-          await supabaseService.deleteReward(user.id, id);
+          await supabaseService.deleteReward(user.id, id, target?.name);
         } catch (err) {
           console.error('Error deleting reward from cloud:', err);
         }

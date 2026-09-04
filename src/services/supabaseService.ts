@@ -283,27 +283,7 @@ export const supabaseService = {
     const habitCompletionsRows = habitCompletionsResult.data;
     const xpTxRows = xpTxResult.data;
     const coinTxRows = coinTxResult.data;
-    let rewardsRows = rewardsResult.data;
-
-    // Auto-seed rewards if empty
-    if (!rewardsRows || rewardsRows.length === 0) {
-      try {
-        const rewardPayloads = DEFAULT_REWARDS.map((r) => ({
-          user_id: userId,
-          name: r.name,
-          description: r.description || '',
-          cost: r.essenceCost,
-          icon: r.icon,
-          active: r.isActive,
-        }));
-        const { data: seededR } = await supabase.from('rewards').insert(rewardPayloads).select();
-        if (seededR && seededR.length > 0) {
-          rewardsRows = seededR;
-        }
-      } catch (err) {
-        console.warn('Seeding rewards notice:', err);
-      }
-    }
+    let rewardsRows = rewardsResult.data || [];
 
     const purchasesRows = purchasesResult.data;
     const notifRows = notifResult.data;
@@ -922,15 +902,29 @@ export const supabaseService = {
     if (error) console.warn('updateReward error:', error);
   },
 
-  async deleteReward(userId: string, id: string): Promise<void> {
-    if (!isUUID(id)) return;
+  async deleteReward(userId: string, id: string, name?: string): Promise<void> {
     try {
-      await supabase.from('reward_purchases').delete().eq('reward_id', id).eq('user_id', userId);
+      if (isUUID(id)) {
+        await supabase.from('reward_purchases').delete().eq('reward_id', id).eq('user_id', userId);
+        const { error } = await supabase.from('rewards').delete().eq('id', id).eq('user_id', userId);
+        if (error) console.warn('deleteReward error:', error);
+      } else if (name) {
+        // Fallback: match and delete by user_id and name if id is a local/legacy non-UUID
+        const { data: matched } = await supabase
+          .from('rewards')
+          .select('id')
+          .eq('user_id', userId)
+          .ilike('name', name);
+        if (matched && matched.length > 0) {
+          for (const m of matched) {
+            await supabase.from('reward_purchases').delete().eq('reward_id', m.id).eq('user_id', userId);
+            await supabase.from('rewards').delete().eq('id', m.id).eq('user_id', userId);
+          }
+        }
+      }
     } catch (e) {
-      console.warn('reward_purchases cleanup notice:', e);
+      console.warn('deleteReward execution error:', e);
     }
-    const { error } = await supabase.from('rewards').delete().eq('id', id).eq('user_id', userId);
-    if (error) console.warn('deleteReward error:', error);
   },
 
   /**

@@ -17,35 +17,47 @@ export function formatDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function parseDateString(dateStr?: string | null): Date {
-  if (!dateStr || typeof dateStr !== 'string') {
+export function parseDateString(dateInput?: string | number | Date | null): Date {
+  if (!dateInput) {
     return new Date();
   }
-  const cleanDateStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  if (dateInput instanceof Date) {
+    return isNaN(dateInput.getTime()) ? new Date() : dateInput;
+  }
+  if (typeof dateInput === 'number') {
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  if (typeof dateInput !== 'string') {
+    return new Date();
+  }
+  const cleanDateStr = dateInput.includes('T') ? dateInput.split('T')[0] : dateInput;
   const parts = cleanDateStr.split('-').map(Number);
   if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
     return new Date(parts[0], parts[1] - 1, parts[2]);
   }
-  const fallback = new Date(dateStr);
+  const fallback = new Date(dateInput);
   return isNaN(fallback.getTime()) ? new Date() : fallback;
 }
 
-export function formatReadableDate(dateStr?: string | null): string {
-  if (!dateStr) return 'Recent';
+export function formatReadableDate(dateInput?: string | number | Date | null): string {
+  if (!dateInput) return 'Recent';
   try {
-    const date = parseDateString(dateStr);
+    const date = parseDateString(dateInput);
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
   } catch {
-    return String(dateStr);
+    return String(dateInput);
   }
 }
 
-export function formatTimeHUD(timestamp: number): string {
-  const date = new Date(timestamp);
+export function formatTimeHUD(timestamp?: number | string | Date | null): string {
+  if (!timestamp) return '--:--';
+  const date = typeof timestamp === 'number' || typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+  if (isNaN(date.getTime())) return '--:--';
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
