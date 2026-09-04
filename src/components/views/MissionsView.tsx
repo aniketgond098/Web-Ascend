@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
+import { ConfirmModal } from '../modals/ConfirmModal';
 import { Mission, Priority } from '../../types';
 
 export const MissionsView: React.FC = () => {
@@ -31,6 +32,7 @@ export const MissionsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'HIGH' | 'DAILY_CORE' | 'SECONDARY' | 'COMPLETED'>('ALL');
   const [editingMission, setEditingMission] = useState<Mission | null>(null);
+  const [deletingMission, setDeletingMission] = useState<Mission | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const todayRecord = dailyRecords[todayDate] || {
@@ -68,10 +70,15 @@ export const MissionsView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDeleteClick = (mission: Mission, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Decommission this mission directive? Historical ledger records will remain preserved.')) {
-      deleteMission(id);
+    setDeletingMission(mission);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingMission) {
+      deleteMission(deletingMission.id);
+      setDeletingMission(null);
     }
   };
 
@@ -297,7 +304,7 @@ export const MissionsView: React.FC = () => {
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={(e) => handleDelete(mission.id, e)}
+                      onClick={(e) => handleDeleteClick(mission, e)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
                       title="Delete Mission"
                     >
@@ -322,7 +329,30 @@ export const MissionsView: React.FC = () => {
             createMission(data);
           }
         }}
+        onDelete={(id) => {
+          const m = missions.find((item) => item.id === id);
+          if (m) {
+            setDeletingMission(m);
+          } else {
+            deleteMission(id);
+          }
+        }}
         initialMission={editingMission}
+      />
+
+      {/* Confirmation Modal for Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingMission}
+        onClose={() => setDeletingMission(null)}
+        onConfirm={handleConfirmDelete}
+        title="DECOMMISSION MISSION"
+        subtitle="SECURITY PROTOCOL OVERRIDE"
+        itemName={deletingMission?.title}
+        message="Are you sure you want to decommission this mission directive? It will be safely removed from your roster immediately."
+        confirmText="DECOMMISSION"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="trash"
       />
     </div>
   );

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import { WebAscendLogo } from '../ui/WebAscendLogo';
 import { RankBadge } from '../ui/RankBadge';
-import { Sparkles, Terminal, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, Terminal, ArrowRight, ShieldCheck, X } from 'lucide-react';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -18,9 +18,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
 
   if (!isOpen) return null;
 
+  const handleDismiss = () => {
+    localStorage.setItem('web_ascend_onboarding_completed', 'true');
+    onClose();
+  };
+
   const handleBegin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!codename.trim()) return;
+    localStorage.setItem('web_ascend_onboarding_completed', 'true');
     initializeProfile(codename.trim(), usePreset);
     setStep('CONFIRMATION');
   };
@@ -32,6 +38,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-lg bg-[#0a0f1e] border-2 border-[#1e293b] rounded-2xl p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.9),0_0_30px_rgba(56,189,248,0.15)] relative font-mono text-slate-200"
       >
+        {/* Close Button */}
+        <button
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer z-10"
+          title="Dismiss"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
         {/* Subtle Tech Corners */}
         <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-[#ff334b]" />
         <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-[#ff334b]" />
@@ -85,14 +100,24 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
               </label>
             </div>
 
-            <button
-              type="submit"
-              disabled={!codename.trim()}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#b91c1c] via-[#dc2626] to-[#ff334b] text-white font-bold tracking-widest uppercase hover:brightness-110 shadow-[0_0_25px_rgba(255,51,75,0.4)] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-['Chakra_Petch']"
-            >
-              <span>BEGIN ASCENSION</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="space-y-2 pt-1">
+              <button
+                type="submit"
+                disabled={!codename.trim()}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#b91c1c] via-[#dc2626] to-[#ff334b] text-white font-bold tracking-widest uppercase hover:brightness-110 shadow-[0_0_25px_rgba(255,51,75,0.4)] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-['Chakra_Petch'] cursor-pointer"
+              >
+                <span>BEGIN ASCENSION</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDismiss}
+                className="w-full py-2 text-xs font-mono text-slate-500 hover:text-slate-300 transition-colors cursor-pointer text-center"
+              >
+                SKIP FOR NOW // KEEP "OPERATIVE"
+              </button>
+            </div>
           </form>
         ) : (
           <div className="text-center space-y-6">
@@ -123,8 +148,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
             </div>
 
             <button
-              onClick={onClose}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#38bdf8] text-white font-bold tracking-widest uppercase hover:brightness-110 shadow-[0_0_20px_rgba(56,189,248,0.4)] font-['Chakra_Petch']"
+              onClick={handleDismiss}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#38bdf8] text-white font-bold tracking-widest uppercase hover:brightness-110 shadow-[0_0_20px_rgba(56,189,248,0.4)] font-['Chakra_Petch'] cursor-pointer"
             >
               VIEW TODAY'S MISSIONS
             </button>

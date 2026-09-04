@@ -14,10 +14,13 @@ import {
   Radio,
   Clock,
   ShieldCheck,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
 import { HabitModal } from '../modals/HabitModal';
+import { ConfirmModal } from '../modals/ConfirmModal';
 import { formatReadableDate } from '../../utils/date';
 import { getRankProgress, RANK_CONFIG, RANK_ORDER, getLevelProgress } from '../../config/progression';
 import { Mission, Habit } from '../../types';
@@ -35,12 +38,22 @@ export const TodayView: React.FC = () => {
     toggleMissionCompletion,
     toggleHabitCompletion,
     createMission,
+    updateMission,
+    deleteMission,
     createHabit,
+    updateHabit,
+    deleteHabit,
     setActiveTab,
   } = useApp();
 
   const [isMissionModalOpen, setIsMissionModalOpen] = useState(false);
+  const [editingMission, setEditingMission] = useState<Mission | null>(null);
+  const [deletingMission, setDeletingMission] = useState<Mission | null>(null);
+
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null);
+
   const [activeWebConnectionId, setActiveWebConnectionId] = useState<string | null>(null);
 
   const todayRecord = dailyRecords[todayDate] || {
@@ -399,6 +412,30 @@ export const TodayView: React.FC = () => {
                             UNRESOLVED
                           </span>
                         )}
+
+                        <div className="flex items-center gap-1 pl-2 border-l border-slate-800">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingMission(mission);
+                              setIsMissionModalOpen(true);
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Edit Directive"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingMission(mission);
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Decommission Mission"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -474,6 +511,29 @@ export const TodayView: React.FC = () => {
                           }`}
                         >
                           {isCompleted ? '✓' : ''}
+                        </div>
+                        <div className="flex items-center gap-0.5 ml-1 pl-1 border-l border-slate-800">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingHabit(habit);
+                              setIsHabitModalOpen(true);
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Edit Protocol"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingHabit(habit);
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Delete Protocol"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -583,14 +643,84 @@ export const TodayView: React.FC = () => {
       {/* Modals */}
       <MissionModal
         isOpen={isMissionModalOpen}
-        onClose={() => setIsMissionModalOpen(false)}
-        onSave={(data) => createMission(data)}
+        onClose={() => {
+          setIsMissionModalOpen(false);
+          setEditingMission(null);
+        }}
+        onSave={(data) => {
+          if (editingMission) {
+            updateMission(editingMission.id, data);
+          } else {
+            createMission(data);
+          }
+        }}
+        onDelete={(id) => {
+          const m = missions.find((item) => item.id === id);
+          if (m) setDeletingMission(m);
+          else deleteMission(id);
+        }}
+        initialMission={editingMission}
       />
 
       <HabitModal
         isOpen={isHabitModalOpen}
-        onClose={() => setIsHabitModalOpen(false)}
-        onSave={(data) => createHabit(data)}
+        onClose={() => {
+          setIsHabitModalOpen(false);
+          setEditingHabit(null);
+        }}
+        onSave={(data) => {
+          if (editingHabit) {
+            updateHabit(editingHabit.id, data);
+          } else {
+            createHabit(data);
+          }
+        }}
+        onDelete={(id) => {
+          const h = habits.find((item) => item.id === id);
+          if (h) setDeletingHabit(h);
+          else deleteHabit(id);
+        }}
+        initialHabit={editingHabit}
+      />
+
+      {/* Confirmation Modal for Mission Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingMission}
+        onClose={() => setDeletingMission(null)}
+        onConfirm={() => {
+          if (deletingMission) {
+            deleteMission(deletingMission.id);
+            setDeletingMission(null);
+          }
+        }}
+        title="DECOMMISSION MISSION"
+        subtitle="SECURITY PROTOCOL OVERRIDE"
+        itemName={deletingMission?.title}
+        message="Are you sure you want to decommission this mission directive? It will be safely removed from your roster immediately."
+        confirmText="DECOMMISSION"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="trash"
+      />
+
+      {/* Confirmation Modal for Habit Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingHabit}
+        onClose={() => setDeletingHabit(null)}
+        onConfirm={() => {
+          if (deletingHabit) {
+            deleteHabit(deletingHabit.id);
+            setDeletingHabit(null);
+          }
+        }}
+        title="DELETE HABIT PROTOCOL"
+        subtitle="SECURITY PROTOCOL OVERRIDE"
+        itemName={deletingHabit?.name}
+        message="Are you sure you want to delete this habit directive? It will be removed from your active daily protocols immediately."
+        confirmText="DELETE PROTOCOL"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="trash"
       />
     </div>
   );

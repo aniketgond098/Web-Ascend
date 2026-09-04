@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Mission, Priority } from '../../types';
 import { BASE_REWARDS } from '../../config/progression';
+import { Trash2 } from 'lucide-react';
 
 interface MissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (missionData: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onDelete?: (id: string) => void;
   initialMission?: Mission | null;
 }
 
@@ -14,6 +16,7 @@ export const MissionModal: React.FC<MissionModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   initialMission,
 }) => {
   const [title, setTitle] = useState('');
@@ -177,20 +180,37 @@ export const MissionModal: React.FC<MissionModalProps> = ({
         </div>
 
         {/* Submit */}
-        <div className="pt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-semibold"
-          >
-            CANCEL
-          </button>
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#b91c1c] to-[#ff334b] text-white font-bold tracking-wider hover:brightness-110 shadow-[0_0_15px_rgba(255,51,75,0.4)]"
-          >
-            {initialMission ? 'UPDATE MISSION' : 'ENGAGE MISSION'}
-          </button>
+        <div className="pt-4 flex items-center justify-between gap-2 border-t border-slate-800">
+          <div>
+            {initialMission && onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(initialMission.id);
+                  onClose();
+                }}
+                className="px-3 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-400 text-xs font-bold tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                DELETE DIRECTIVE
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-semibold cursor-pointer"
+            >
+              CANCEL
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#b91c1c] to-[#ff334b] text-white font-bold tracking-wider hover:brightness-110 shadow-[0_0_15px_rgba(255,51,75,0.4)] cursor-pointer"
+            >
+              {initialMission ? 'UPDATE MISSION' : 'ENGAGE MISSION'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

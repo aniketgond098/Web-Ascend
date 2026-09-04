@@ -16,17 +16,26 @@ import {
   Terminal,
   Activity,
   Calendar,
+  Database,
+  Lock,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RankBadge } from '../ui/RankBadge';
 import { RANK_CONFIG } from '../../config/progression';
 import { formatReadableDate } from '../../utils/date';
 import { DailyRecord } from '../../types';
+import { ConfirmModal } from '../modals/ConfirmModal';
 import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
 import { SpiderIcon } from '../ui/SpiderIcon';
 
 export const ProfileView: React.FC = () => {
   const {
+    user,
+    syncStatus,
+    setAuthModalOpen,
+    setAccountModalOpen,
+    setSupabaseConfigModalOpen,
     profile,
     updateProfile,
     missions,
@@ -38,6 +47,7 @@ export const ProfileView: React.FC = () => {
     resetTestProgression,
     exportData,
     importData,
+    addNotification,
   } = useApp();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -45,6 +55,7 @@ export const ProfileView: React.FC = () => {
   const [importText, setImportText] = useState('');
   const [showImportBox, setShowImportBox] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   const rankInfo = RANK_CONFIG[profile.rank];
 
@@ -71,22 +82,22 @@ export const ProfileView: React.FC = () => {
     if (!importText.trim()) return;
     const success = importData(importText);
     if (success) {
-      alert('System data successfully loaded and restored.');
+      addNotification('BACKUP RESTORED', 'System data successfully loaded and restored.', 'SYSTEM');
       setShowImportBox(false);
       setImportText('');
     } else {
-      alert('Invalid backup schema. Import aborted.');
+      addNotification('IMPORT FAILED', 'Invalid backup schema. Import aborted.', 'SYSTEM');
     }
   };
 
   const handleReset = () => {
-    if (
-      window.confirm(
-        'WARNING: This will reset your operative back to factory specs: Rank E (0 / 180 successful days), Level 1, 0 XP, 0 Spidey Coins, and 0 Streak. Proceed?'
-      )
-    ) {
-      resetTestProgression();
-    }
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmReset = () => {
+    resetTestProgression();
+    setIsResetModalOpen(false);
+    addNotification('OPERATIVE RE-INITIALIZED', 'Operative reset to factory specs.', 'SYSTEM');
   };
 
   return (
@@ -267,7 +278,103 @@ export const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. System Preferences & Local Backup Management */}
+      {/* 4. Supabase Persistent Cloud Database (Source of Truth) */}
+      <div className="p-6 rounded-2xl bg-gradient-to-br from-[#080d1a] to-[#0a0712] border border-blue-500/30 shadow-[0_0_25px_rgba(30,58,138,0.15)] relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-blue-900/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-950/60 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.3)]">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white uppercase font-['Chakra_Petch'] tracking-wide">
+                  SUPABASE CLOUD DATABASE
+                </h3>
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                    syncStatus === 'SYNCED'
+                      ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300'
+                      : syncStatus === 'SYNCING'
+                      ? 'bg-amber-950/50 border-amber-500/50 text-amber-300 animate-pulse'
+                      : 'bg-blue-950/50 border-blue-500/50 text-blue-300'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus === 'SYNCED'
+                        ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
+                        : syncStatus === 'SYNCING'
+                        ? 'bg-amber-400'
+                        : 'bg-blue-400'
+                    }`}
+                  />
+                  {syncStatus === 'SYNCED'
+                    ? 'SOURCE OF TRUTH ACTIVE'
+                    : syncStatus === 'SYNCING'
+                    ? 'SYNCING WITH POSTGRES'
+                    : 'LOCAL SANDBOX MODE'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                All directives, habits, XP ledger transactions, and rank progression are stored permanently in Supabase PostgreSQL.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <button
+                onClick={() => setAccountModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 text-xs font-mono font-bold text-blue-300 flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)] cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                <span>ACCOUNT SETTINGS</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-white font-bold text-xs font-mono uppercase tracking-wider transition-all shadow-[0_0_14px_rgba(230,43,58,0.3)] flex items-center gap-1.5 cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>SIGN IN / CONNECT CLOUD</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setSupabaseConfigModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-slate-500 text-xs font-mono text-slate-300 transition-all cursor-pointer"
+              title="View Supabase Keys & SQL Migration Script"
+            >
+              SQL & KEYS
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+          <div className="p-3 rounded-xl bg-[#05070A]/70 border border-blue-900/20">
+            <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Authenticated User</span>
+            <span className="text-slate-200 font-semibold truncate block">
+              {user ? user.email || user.id : 'None (Operating in client sandbox)'}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#05070A]/70 border border-blue-900/20">
+            <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Database Engine</span>
+            <span className="text-blue-400 font-semibold flex items-center gap-1">
+              <span>Supabase PostgreSQL + RLS</span>
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#05070A]/70 border border-blue-900/20">
+            <span className="text-[10px] text-slate-500 uppercase block mb-0.5">Device Resiliency</span>
+            <span className="text-emerald-400 font-semibold">
+              Persists across reboots & clears
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. System Preferences & Local Backup Management */}
       <div>
         <h3 className="text-base font-bold text-white uppercase font-['Chakra_Petch'] tracking-wider mb-3">
           SYSTEM PREFERENCES & DATA BACKUPS
@@ -381,6 +488,21 @@ export const ProfileView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Reset */}
+      <ConfirmModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirm={handleConfirmReset}
+        title="FACTORY SPEC RE-INITIALIZATION"
+        subtitle="OPERATIVE DATA SYSTEM OVERRIDE"
+        itemName="All Active Progress & Directives"
+        message="This will reset your operative back to factory specs: Rank E (0/180 successful days), Level 1, 0 XP, 0 Spidey Coins, and 0 Streak. Are you certain you want to proceed?"
+        confirmText="CONFIRM RESET"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="alert"
+      />
     </div>
   );
 };

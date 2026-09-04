@@ -5,13 +5,12 @@ import {
   Volume2,
   VolumeX,
   X,
-  CheckCircle2,
-  AlertCircle,
-  Menu,
+  Database,
+  User,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { EssenceDisplay } from '../ui/EssenceDisplay';
-import { RankBadge } from '../ui/RankBadge';
 import { WebAscendLogo } from '../ui/WebAscendLogo';
 import { getLevelProgress } from '../../config/progression';
 import { formatTimeHUD } from '../../utils/date';
@@ -22,12 +21,20 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   const {
+    user,
+    syncStatus,
+    isSupabaseReady,
     profile,
     notifications,
     markNotificationRead,
     clearNotifications,
     toggleSound,
     setActiveTab,
+    setAuthModalOpen,
+    setAccountModalOpen,
+    setSupabaseConfigModalOpen,
+    hasSecretKeyError,
+    isMissingTablesError,
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -35,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   const { level, currentLevelXP, nextLevelXP, progressPercent } = getLevelProgress(profile.totalXP);
 
   return (
-    <header className="sticky top-0 z-40 w-full min-h-[5rem] border-b border-blue-900/20 px-4 sm:px-8 py-3 flex items-center justify-between bg-[#05070A]/80 backdrop-blur-md select-none">
+    <header className="sticky top-0 z-40 w-full min-h-[5rem] border-b border-blue-900/20 px-4 sm:px-8 py-3 flex items-center justify-between bg-[#05070A]/85 backdrop-blur-md select-none">
       <div className="flex items-center justify-between w-full max-w-7xl mx-auto gap-4">
         {/* Left: Mobile Logo or Desktop Sleek Telemetry Columns */}
         <div className="flex items-center gap-4 sm:gap-8">
@@ -44,11 +51,83 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
           </div>
 
           <div className="hidden sm:flex items-center gap-6 lg:gap-8 font-mono">
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">System Status</p>
-              <p className="text-xs text-blue-400 font-mono font-semibold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_6px_#60a5fa]" />
-                SYSTEM ONLINE
+            {/* Database / Cloud Status Pill */}
+            <div
+              onClick={() => {
+                if (hasSecretKeyError || isMissingTablesError) {
+                  setSupabaseConfigModalOpen(true);
+                } else if (!user) {
+                  setAuthModalOpen(true);
+                } else {
+                  setAccountModalOpen(true);
+                }
+              }}
+              className="cursor-pointer group"
+              title={
+                hasSecretKeyError
+                  ? 'Click to fix secret key error'
+                  : isMissingTablesError
+                  ? 'Click to run SQL schema in Supabase'
+                  : user
+                  ? 'PostgreSQL Synced: Click to view operative account'
+                  : isSupabaseReady
+                  ? 'PostgreSQL Connected: Click to sign in with Cloud Auth'
+                  : 'Local Demo Mode: Click to connect Supabase'
+              }
+            >
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                <Database className="w-3 h-3 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                <span>DB Source</span>
+              </p>
+              <p className="text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    hasSecretKeyError
+                      ? 'bg-red-500 animate-pulse'
+                      : isMissingTablesError
+                      ? 'bg-amber-400 animate-pulse'
+                      : syncStatus === 'SYNCED'
+                      ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
+                      : syncStatus === 'SYNCING'
+                      ? 'bg-amber-400 animate-ping'
+                      : syncStatus === 'OFFLINE'
+                      ? 'bg-red-500'
+                      : isSupabaseReady
+                      ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
+                      : 'bg-blue-400'
+                  }`}
+                />
+                <span
+                  className={
+                    hasSecretKeyError
+                      ? 'text-red-400 font-bold'
+                      : isMissingTablesError
+                      ? 'text-amber-400 font-bold'
+                      : syncStatus === 'SYNCED'
+                      ? 'text-emerald-400 group-hover:text-emerald-300'
+                      : syncStatus === 'SYNCING'
+                      ? 'text-amber-400'
+                      : syncStatus === 'OFFLINE'
+                      ? 'text-red-400'
+                      : isSupabaseReady
+                      ? 'text-emerald-400 group-hover:text-emerald-300'
+                      : 'text-blue-400 group-hover:text-blue-300'
+                  }
+                >
+                  {hasSecretKeyError
+                    ? 'KEY CONFLICT'
+                    : isMissingTablesError
+                    ? 'TABLES MISSING'
+                    : syncStatus === 'SYNCED'
+                    ? 'POSTGRES SYNCED'
+                    : syncStatus === 'SYNCING'
+                    ? 'SYNCING...'
+                    : syncStatus === 'OFFLINE'
+                    ? 'OFFLINE'
+                    : isSupabaseReady
+                    ? 'POSTGRES READY (GUEST)'
+                    : 'LOCAL DEMO'}
+                </span>
               </p>
             </div>
 
@@ -75,8 +154,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
           </div>
         </div>
 
-        {/* Right: Level Progress & Controls */}
-        <div className="flex items-center gap-4 sm:gap-6">
+        {/* Right: Level Progress, Auth & Controls */}
+        <div className="flex items-center gap-3 sm:gap-5">
           {/* Web Streak pill */}
           <div
             onClick={() => setActiveTab('TODAY')}
@@ -93,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
             <p className="text-xs text-slate-300 font-bold font-['Chakra_Petch'] tracking-wide">
               LEVEL {level}
             </p>
-            <div className="w-40 lg:w-48 h-2 bg-slate-900 border border-blue-900/30 rounded-full mt-1 overflow-hidden">
+            <div className="w-36 lg:w-44 h-2 bg-slate-900 border border-blue-900/30 rounded-full mt-1 overflow-hidden">
               <div
                 className="h-full bg-blue-500 shadow-[0_0_10px_#3b82f6] transition-all duration-500 rounded-full"
                 style={{ width: `${progressPercent}%` }}
@@ -103,6 +182,29 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               {currentLevelXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP
             </p>
           </div>
+
+          {/* Auth Button: Sign In or User Account */}
+          {user ? (
+            <button
+              onClick={() => setAccountModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-950/40 border border-blue-500/40 text-blue-300 hover:text-white hover:border-blue-400 hover:bg-blue-900/50 transition-all font-mono text-xs shadow-[0_0_10px_rgba(2,132,199,0.15)]"
+              title="Operative Cloud Profile & Settings"
+            >
+              <User className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline font-bold tracking-wider uppercase font-['Chakra_Petch'] max-w-[100px] truncate">
+                {profile.username || 'OPERATIVE'}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600/80 to-blue-600/80 hover:from-red-500 hover:to-blue-500 text-white font-bold text-xs font-mono uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(230,43,58,0.25)] cursor-pointer"
+              title="Sign In / Register with Supabase"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>CLOUD AUTH</span>
+            </button>
+          )}
 
           {/* Audio Button */}
           <button
@@ -207,4 +309,3 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
     </header>
   );
 };
-

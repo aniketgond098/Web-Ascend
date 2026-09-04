@@ -10,8 +10,38 @@ class SoundFX {
     this.enabled = enabled;
   }
 
+  public toggleSound(): boolean {
+    this.enabled = !this.enabled;
+    return this.enabled;
+  }
+
   public isEnabled(): boolean {
     return this.enabled;
+  }
+
+  public playError() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.setValueAtTime(140, now + 0.08);
+
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch {
+      // Audio fallback
+    }
   }
 
   private getContext(): AudioContext | null {

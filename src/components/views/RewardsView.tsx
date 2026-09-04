@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RewardModal } from '../modals/RewardModal';
+import { ConfirmModal } from '../modals/ConfirmModal';
 import { Reward } from '../../types';
 import { formatTimeHUD, formatReadableDate } from '../../utils/date';
 import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
@@ -34,6 +35,7 @@ export const RewardsView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'MARKET' | 'LEDGER'>('MARKET');
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
+  const [deletingReward, setDeletingReward] = useState<Reward | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'FOCUS' | 'LEISURE' | 'UPGRADE' | 'GEAR'>('ALL');
   const [ledgerFilter, setLedgerFilter] = useState<'ALL' | 'EARNED' | 'SPENT'>('ALL');
@@ -45,10 +47,15 @@ export const RewardsView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = (reward: Reward, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this market reward directive?')) {
-      deleteReward(id);
+    setDeletingReward(reward);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingReward) {
+      deleteReward(deletingReward.id);
+      setDeletingReward(null);
     }
   };
 
@@ -238,7 +245,7 @@ export const RewardsView: React.FC = () => {
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={(e) => handleDelete(reward.id, e)}
+                        onClick={(e) => handleDelete(reward, e)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
                         title="Delete Reward"
                       >
@@ -382,6 +389,21 @@ export const RewardsView: React.FC = () => {
           }
         }}
         initialReward={editingReward}
+      />
+
+      {/* Confirmation Modal for Reward Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingReward}
+        onClose={() => setDeletingReward(null)}
+        onConfirm={handleConfirmDelete}
+        title="REMOVE REWARD DIRECTIVE"
+        subtitle="MARKET ROSTER OVERRIDE"
+        itemName={deletingReward?.name}
+        message="Are you sure you want to remove this item from the market roster? It will no longer be available for purchase."
+        confirmText="REMOVE REWARD"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="trash"
       />
     </div>
   );

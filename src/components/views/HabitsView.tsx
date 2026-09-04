@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { HabitModal } from '../modals/HabitModal';
+import { ConfirmModal } from '../modals/ConfirmModal';
 import { Habit } from '../../types';
 
 export const HabitsView: React.FC = () => {
@@ -28,6 +29,7 @@ export const HabitsView: React.FC = () => {
   } = useApp();
 
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const todayRecord = dailyRecords[todayDate] || {
@@ -48,10 +50,15 @@ export const HabitsView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDeleteClick = (habit: Habit, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this habit anchor? Historical records will remain intact.')) {
-      deleteHabit(id);
+    setDeletingHabit(habit);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingHabit) {
+      deleteHabit(deletingHabit.id);
+      setDeletingHabit(null);
     }
   };
 
@@ -248,7 +255,7 @@ export const HabitsView: React.FC = () => {
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={(e) => handleDelete(habit.id, e)}
+                      onClick={(e) => handleDeleteClick(habit, e)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
                       title="Delete Habit"
                     >
@@ -273,7 +280,30 @@ export const HabitsView: React.FC = () => {
             createHabit(data);
           }
         }}
+        onDelete={(id) => {
+          const h = habits.find((item) => item.id === id);
+          if (h) {
+            setDeletingHabit(h);
+          } else {
+            deleteHabit(id);
+          }
+        }}
         initialHabit={editingHabit}
+      />
+
+      {/* Confirmation Modal for Habit Deletion */}
+      <ConfirmModal
+        isOpen={!!deletingHabit}
+        onClose={() => setDeletingHabit(null)}
+        onConfirm={handleConfirmDelete}
+        title="DELETE HABIT PROTOCOL"
+        subtitle="SECURITY PROTOCOL OVERRIDE"
+        itemName={deletingHabit?.name}
+        message="Are you sure you want to delete this habit directive? It will be removed from your active daily protocols immediately."
+        confirmText="DELETE PROTOCOL"
+        cancelText="ABORT"
+        isDestructive={true}
+        icon="trash"
       />
     </div>
   );

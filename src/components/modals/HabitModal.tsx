@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Habit } from '../../types';
 import { BASE_REWARDS } from '../../config/progression';
+import { Trash2 } from 'lucide-react';
 
 interface HabitModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (habitData: Omit<Habit, 'id' | 'createdAt' | 'currentStreak' | 'longestStreak'>) => void;
+  onDelete?: (id: string) => void;
   initialHabit?: Habit | null;
 }
 
@@ -14,6 +16,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   initialHabit,
 }) => {
   const [name, setName] = useState('');
@@ -122,20 +125,37 @@ export const HabitModal: React.FC<HabitModalProps> = ({
           </div>
         </div>
 
-        <div className="pt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-semibold"
-          >
-            CANCEL
-          </button>
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#38bdf8] text-white font-bold tracking-wider hover:brightness-110 shadow-[0_0_15px_rgba(56,189,248,0.4)]"
-          >
-            {initialHabit ? 'UPDATE HABIT' : 'ESTABLISH HABIT'}
-          </button>
+        <div className="pt-4 flex items-center justify-between gap-2 border-t border-slate-800">
+          <div>
+            {initialHabit && onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(initialHabit.id);
+                  onClose();
+                }}
+                className="px-3 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-400 text-xs font-bold tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                DELETE PROTOCOL
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-semibold cursor-pointer"
+            >
+              CANCEL
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#38bdf8] text-white font-bold tracking-wider hover:brightness-110 shadow-[0_0_15px_rgba(56,189,248,0.4)] cursor-pointer"
+            >
+              {initialHabit ? 'UPDATE HABIT' : 'ESTABLISH HABIT'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>
