@@ -354,19 +354,24 @@ export const supabaseService = {
       }
     }
 
-    // Transform Missions
-    const missions: Mission[] = missionsRows.map((m) => ({
-      id: m.id,
-      title: m.title,
-      description: m.description || '',
-      priority: m.priority,
-      xpReward: m.xp_reward,
-      essenceReward: m.spidey_coin_reward,
-      isRequired: m.required,
-      isActive: m.active,
-      createdAt: new Date(m.created_at).getTime(),
-      updatedAt: new Date(m.updated_at).getTime(),
-    }));
+    // Transform Missions (missions are single-day tasks)
+    const missions: Mission[] = missionsRows.map((m) => {
+      const createdAtDate = m.created_at ? new Date(m.created_at) : new Date();
+      const derivedDate = m.target_date || (!isNaN(createdAtDate.getTime()) ? createdAtDate.toISOString().split('T')[0] : todayDate);
+      return {
+        id: m.id,
+        title: m.title,
+        description: m.description || '',
+        priority: m.priority,
+        xpReward: m.xp_reward,
+        essenceReward: m.spidey_coin_reward,
+        isRequired: m.required,
+        isActive: m.active,
+        createdAt: createdAtDate.getTime(),
+        updatedAt: new Date(m.updated_at).getTime(),
+        date: derivedDate,
+      };
+    });
 
     // Map habit completion dates for streak calculation
     const habitDatesMap: Record<string, Set<string>> = {};
@@ -943,13 +948,18 @@ export const supabaseService = {
     const completedMissionIds = new Set((missionComps || []).map((m) => m.mission_id));
     const completedHabitIds = new Set((habitComps || []).map((h) => h.habit_id));
 
-    const activeReqMissions = missions.filter((m) => m.isActive && m.isRequired);
+    // Scope active required missions strictly to the evaluated date (missions are one-day tasks)
+    const activeReqMissions = missions.filter((m) => {
+      if (!m.isActive || !m.isRequired) return false;
+      const mDate = m.date || (m.createdAt ? new Date(m.createdAt).toISOString().split('T')[0] : date);
+      return mDate === date;
+    });
     const activeHabits = habits.filter((h) => h.isActive);
 
     const reqMissionsCompletedCount = activeReqMissions.filter((m) => completedMissionIds.has(m.id)).length;
     const habitsCompletedCount = activeHabits.filter((h) => completedHabitIds.has(h.id)).length;
 
-    const allReqMissionsDone = activeReqMissions.length > 0 && reqMissionsCompletedCount === activeReqMissions.length;
+    const allReqMissionsDone = activeReqMissions.length === 0 || reqMissionsCompletedCount === activeReqMissions.length;
     const allHabitsDone = activeHabits.length > 0 && habitsCompletedCount === activeHabits.length;
 
     const isSuccessfulDay = allReqMissionsDone && allHabitsDone;
@@ -1172,7 +1182,7 @@ export const supabaseService = {
   /**
    * Mission CRUD
    */
-  async createMission(userId: string, mission: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>): Promise<Mission | null> {
+  async createMission(userId: string, mission: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'> & { date?: string }): Promise<Mission | null> {
     const { data, error } = await supabase
       .from('missions')
       .insert({
@@ -1190,6 +1200,7 @@ export const supabaseService = {
 
     if (error || !data) return null;
 
+    const createdAtDate = data.created_at ? new Date(data.created_at) : new Date();
     return {
       id: data.id,
       title: data.title,
@@ -1199,8 +1210,9 @@ export const supabaseService = {
       essenceReward: data.spidey_coin_reward,
       isRequired: data.required,
       isActive: data.active,
-      createdAt: new Date(data.created_at).getTime(),
+      createdAt: createdAtDate.getTime(),
       updatedAt: new Date(data.updated_at).getTime(),
+      date: data.target_date || mission.date || (!isNaN(createdAtDate.getTime()) ? createdAtDate.toISOString().split('T')[0] : undefined),
     };
   },
 

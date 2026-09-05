@@ -13,6 +13,7 @@ export interface Mission {
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
+  date?: string; // YYYY-MM-DD target calendar day (missions are one-day tasks)
 }
 
 export interface Habit {

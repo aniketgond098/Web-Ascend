@@ -16,12 +16,7 @@ import { RankBadge } from '../ui/RankBadge';
 import { RANK_CONFIG, RANK_ORDER, getRankProgress } from '../../config/progression';
 
 export const AscendView: React.FC = () => {
-  const {
-    profile,
-    simulateSuccessfulDay,
-    simulateTierAscension,
-    resetTestProgression,
-  } = useApp();
+  const { profile } = useApp();
 
   const rankProgress = getRankProgress(profile.totalSuccessfulDays ?? profile.consistencyDaysCompleted ?? 0);
   const currentRankInfo = RANK_CONFIG[profile.rank];
@@ -42,33 +37,6 @@ export const AscendView: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-white uppercase font-['Chakra_Petch'] tracking-wide mt-1">
             ASCENSION
           </h1>
-        </div>
-
-        {/* Test / Diagnostic Simulation Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={simulateSuccessfulDay}
-            title="Simulate completing 1 full calendar day with all required missions and habits"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-950/60 border border-blue-800/50 hover:bg-blue-900/50 text-blue-300 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-sm cursor-pointer"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>+1 SUCCESSFUL DAY</span>
-          </button>
-          <button
-            onClick={simulateTierAscension}
-            title="Simulate 180 successful calendar days to elevate one full rank tier"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/60 border border-red-800/50 hover:bg-red-900/50 text-red-300 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-sm cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>+180 DAYS (ASCEND TIER)</span>
-          </button>
-          <button
-            onClick={resetTestProgression}
-            title="Reset testing state back to Rank E (0 / 180 days)"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-sm cursor-pointer"
-          >
-            <span>RESET TO RANK E</span>
-          </button>
         </div>
       </div>
 

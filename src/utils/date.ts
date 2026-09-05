@@ -166,3 +166,18 @@ export function calculateStreaks(
 
   return { currentStreak, longestStreak };
 }
+
+/**
+ * Returns the calendar date (YYYY-MM-DD) that a mission belongs to.
+ * Missions are single-day tasks that belong to their specific creation/assigned date.
+ */
+export function getMissionDate(mission: { date?: string; createdAt?: number }): string {
+  if (mission.date) return mission.date;
+  if (mission.createdAt) {
+    const d = new Date(mission.createdAt);
+    if (!isNaN(d.getTime())) {
+      return formatDateString(d);
+    }
+  }
+  return getTodayDateString();
+}

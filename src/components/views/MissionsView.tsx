@@ -17,6 +17,7 @@ import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
 import { ConfirmModal } from '../modals/ConfirmModal';
 import { Mission, Priority } from '../../types';
+import { formatReadableDate, getMissionDate } from '../../utils/date';
 
 export const MissionsView: React.FC = () => {
   const {
@@ -30,6 +31,7 @@ export const MissionsView: React.FC = () => {
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [scope, setScope] = useState<'TODAY' | 'ALL'>('TODAY');
   const [filterType, setFilterType] = useState<'ALL' | 'HIGH' | 'DAILY_CORE' | 'SECONDARY' | 'COMPLETED'>('ALL');
   const [editingMission, setEditingMission] = useState<Mission | null>(null);
   const [deletingMission, setDeletingMission] = useState<Mission | null>(null);
@@ -47,7 +49,12 @@ export const MissionsView: React.FC = () => {
     status: 'IN_PROGRESS',
   };
 
-  const filteredMissions = missions.filter((m) => {
+  const todayMissions = missions.filter((m) => getMissionDate(m) === todayDate);
+  const activeTodayMissions = todayMissions.filter((m) => m.isActive);
+
+  const scopeBaseList = scope === 'TODAY' ? activeTodayMissions : missions;
+
+  const filteredMissions = scopeBaseList.filter((m) => {
     const matchesSearch =
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (m.description && m.description.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -87,10 +94,12 @@ export const MissionsView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const totalCount = missions.length;
-  const requiredCount = missions.filter((m) => m.isRequired).length;
-  const highPriorityCount = missions.filter((m) => m.priority === 'HIGH').length;
-  const completedTodayCount = todayRecord.completedMissionIds.length;
+  const totalCount = scope === 'TODAY' ? activeTodayMissions.length : missions.length;
+  const requiredCount = (scope === 'TODAY' ? activeTodayMissions : missions).filter((m) => m.isRequired).length;
+  const highPriorityCount = (scope === 'TODAY' ? activeTodayMissions : missions).filter((m) => m.priority === 'HIGH').length;
+  const completedTodayCount = todayRecord.completedMissionIds.filter((id) =>
+    (scope === 'TODAY' ? activeTodayMissions : missions).some((m) => m.id === id)
+  ).length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8 font-sans">
@@ -101,24 +110,57 @@ export const MissionsView: React.FC = () => {
             <Target className="w-4 h-4" />
             <span>ACTIVE DIRECTIVES // CITY STABILIZATION</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white uppercase font-['Chakra_Petch'] tracking-wide mt-1">
-            MISSIONS
-          </h1>
+          <div className="flex items-center gap-3 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white uppercase font-['Chakra_Petch'] tracking-wide">
+              MISSIONS
+            </h1>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-red-950/70 border border-red-800/40 text-red-400 uppercase tracking-wider">
+              ONE-DAY LIFECYCLE
+            </span>
+          </div>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold tracking-wider uppercase shadow-[0_0_15px_rgba(239,68,68,0.25)] transition-all font-['Chakra_Petch'] active:scale-95 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>NEW DIRECTIVE</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Scope Selector */}
+          <div className="flex items-center p-1 rounded-xl bg-[#0A0E17] border border-blue-900/30 font-mono text-xs">
+            <button
+              onClick={() => setScope('TODAY')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all cursor-pointer ${
+                scope === 'TODAY'
+                  ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              TODAY ({activeTodayMissions.length})
+            </button>
+            <button
+              onClick={() => setScope('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all cursor-pointer ${
+                scope === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ALL ({missions.length})
+            </button>
+          </div>
+
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold tracking-wider uppercase shadow-[0_0_15px_rgba(239,68,68,0.25)] transition-all font-['Chakra_Petch'] active:scale-95 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>NEW DIRECTIVE</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Top Metrics Matrix */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
         <div className="p-4 rounded-xl bg-[#0A0E17] border border-blue-900/20">
-          <span className="text-[11px] text-slate-500 uppercase tracking-wider block">TOTAL DIRECTIVES</span>
+          <span className="text-[11px] text-slate-500 uppercase tracking-wider block">
+            {scope === 'TODAY' ? "TODAY'S DIRECTIVES" : 'TOTAL DIRECTIVES'}
+          </span>
           <div className="text-2xl font-bold text-white mt-0.5 font-['Chakra_Petch']">{totalCount}</div>
         </div>
 
@@ -138,11 +180,16 @@ export const MissionsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Anti-Farm Protocol Notification */}
-      <div className="p-3.5 rounded-xl bg-[#0A0E17] border border-blue-900/20 text-xs flex items-center gap-3 text-slate-400 font-mono">
-        <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0" />
-        <span className="text-[11px] leading-relaxed">
-          <strong className="text-slate-300 uppercase">Directive Protocol:</strong> Each mission rewards XP and Spidey Coins once per daily cycle. Repeated toggling safeguards the integrity of your web network.
+      {/* 3. One-Day Directive Protocol Notification */}
+      <div className="p-3.5 rounded-xl bg-[#0A0E17] border border-blue-900/20 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-slate-300 font-mono">
+        <div className="flex items-center gap-3">
+          <Clock className="w-4 h-4 text-red-400 shrink-0" />
+          <span className="text-[11px] leading-relaxed">
+            <strong className="text-red-400 font-['Chakra_Petch'] uppercase">One-Day Mission Directive:</strong> Missions are tactical one-day tasks that remain active for the day they are added and vanish on the next day ({formatReadableDate(todayDate)}). Daily habits persist to maintain long-term streaks.
+          </span>
+        </div>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-950/70 border border-red-800/40 text-red-300 uppercase tracking-wider shrink-0 self-start sm:self-auto">
+          VANISHES AT MIDNIGHT
         </span>
       </div>
 
@@ -253,6 +300,16 @@ export const MissionsView: React.FC = () => {
 
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono ${
+                          getMissionDate(mission) === todayDate
+                            ? 'bg-red-950/60 text-red-400 border border-red-800/40'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}
+                      >
+                        {getMissionDate(mission) === todayDate ? 'TODAY' : getMissionDate(mission)}
+                      </span>
+
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono ${
                           mission.priority === 'HIGH'
                             ? 'bg-red-950/60 text-red-400 border border-red-800/40'
                             : mission.priority === 'MEDIUM'
@@ -338,6 +395,7 @@ export const MissionsView: React.FC = () => {
           }
         }}
         initialMission={editingMission}
+        targetDate={todayDate}
       />
 
       {/* Confirmation Modal for Deletion */}

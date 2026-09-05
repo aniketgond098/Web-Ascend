@@ -21,7 +21,7 @@ import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
 import { HabitModal } from '../modals/HabitModal';
 import { ConfirmModal } from '../modals/ConfirmModal';
-import { formatReadableDate } from '../../utils/date';
+import { formatReadableDate, getMissionDate } from '../../utils/date';
 import { getRankProgress, RANK_CONFIG, RANK_ORDER, getLevelProgress } from '../../config/progression';
 import { Mission, Habit } from '../../types';
 import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
@@ -68,7 +68,9 @@ export const TodayView: React.FC = () => {
     status: 'IN_PROGRESS',
   };
 
-  const activeMissions = missions.filter((m) => m.isActive);
+  const activeMissions = missions.filter(
+    (m) => m.isActive && getMissionDate(m) === todayDate
+  );
   const activeHabits = habits.filter((h) => h.isActive);
 
   const totalObjectives = activeMissions.length + activeHabits.length;
@@ -294,19 +296,25 @@ export const TodayView: React.FC = () => {
           {/* MISSIONS SECTION */}
           <div>
             <div className="flex justify-between items-end border-b border-blue-900/20 pb-3 mb-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <h2 className="text-xl font-bold text-white tracking-wide font-['Chakra_Petch'] flex items-center gap-2">
                   <Target className="w-5 h-5 text-red-500" />
                   TODAY'S MISSIONS
                 </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-950/70 text-red-400 border border-red-800/40 font-bold uppercase tracking-wider">
+                  ONE-DAY
+                </span>
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950/50 text-blue-400 border border-blue-900/30">
-                  {todayRecord.completedMissionIds.length}/{activeMissions.length}
+                  {todayRecord.completedMissionIds.filter((id) => activeMissions.some((m) => m.id === id)).length}/{activeMissions.length}
                 </span>
               </div>
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setIsMissionModalOpen(true)}
+                  onClick={() => {
+                    setEditingMission(null);
+                    setIsMissionModalOpen(true);
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-['Chakra_Petch'] text-xs font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(239,68,68,0.25)] transition-all cursor-pointer active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" /> NEW MISSION
@@ -324,14 +332,21 @@ export const TodayView: React.FC = () => {
             <div className="space-y-3">
               {activeMissions.length === 0 ? (
                 <div className="bg-[#0A0E17] border border-blue-900/20 p-8 rounded-xl text-center space-y-3">
-                  <p className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+                  <p className="text-xs font-mono text-slate-400 uppercase tracking-wider font-bold">
                     No active mission directives assigned for today.
                   </p>
+                  <p className="text-[11px] font-mono text-slate-500 max-w-md mx-auto">
+                    Missions are one-day tactical tasks assigned for today. They vanish automatically when the calendar cycle advances tomorrow.
+                  </p>
                   <button
-                    onClick={() => setIsMissionModalOpen(true)}
-                    className="px-4 py-2 rounded-lg bg-red-600/20 border border-red-500/40 text-red-300 font-mono text-xs hover:bg-red-600/30 transition-all cursor-pointer"
+                    onClick={() => {
+                      setEditingMission(null);
+                      setIsMissionModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-mono text-xs font-bold uppercase shadow-[0_0_12px_rgba(239,68,68,0.25)] transition-all cursor-pointer active:scale-95"
                   >
-                    + INITIALIZE MISSION DIRECTIVE
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ INITIALIZE MISSION DIRECTIVE</span>
                   </button>
                 </div>
               ) : (
@@ -660,6 +675,7 @@ export const TodayView: React.FC = () => {
           else deleteMission(id);
         }}
         initialMission={editingMission}
+        targetDate={todayDate}
       />
 
       <HabitModal

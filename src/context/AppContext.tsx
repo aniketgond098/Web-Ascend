@@ -26,6 +26,10 @@ import {
 import {
   getTodayDateString,
   calculateStreaks,
+  formatDateString,
+  parseDateString,
+  formatReadableDate,
+  getMissionDate,
 } from '../utils/date';
 import { soundFX } from '../utils/audio';
 import { supabase, isSupabaseConfigured, hasSecretKeyConfigured } from '../lib/supabase';
@@ -76,6 +80,7 @@ interface AppContextType {
   // Core Data
   profile: UserProfile;
   missions: Mission[];
+  todayMissions: Mission[];
   habits: Habit[];
   dailyRecords: Record<string, DailyRecord>;
   xpTransactions: XPTransaction[];
@@ -94,7 +99,7 @@ interface AppContextType {
 
   // Mission Actions
   toggleMissionCompletion: (missionId: string) => Promise<void>;
-  createMission: (mission: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  createMission: (mission: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'> & { date?: string }) => Promise<void>;
   updateMission: (id: string, updates: Partial<Mission>) => Promise<void>;
   deleteMission: (id: string) => Promise<void>;
 
@@ -128,6 +133,8 @@ interface AppContextType {
   simulateSuccessfulDay: () => void;
   simulateTierAscension: () => void;
   triggerAscendSimulation: () => void;
+  simulateNextDay: () => void;
+  jumpToCurrentDate: () => void;
   resetAllData: () => void;
   exportData: () => string;
   importData: (jsonStr: string) => boolean;
@@ -171,7 +178,21 @@ const createDefaultProfile = (today: string, username?: string): UserProfile => 
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const todayDate = getTodayDateString();
+  const [todayDate, setTodayDate] = useState<string>(getTodayDateString());
+
+  // Check for calendar day change / rollover
+  useEffect(() => {
+    const checkDay = () => {
+      const current = getTodayDateString();
+      setTodayDate((prev) => (prev !== current ? current : prev));
+    };
+    const interval = setInterval(checkDay, 15000);
+    window.addEventListener('focus', checkDay);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkDay);
+    };
+  }, []);
 
   // 1. Auth & Connectivity State
   const [user, setUser] = useState<any | null>(null);
@@ -206,18 +227,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return parsed;
       }
     } catch {}
-    return createDefaultProfile(todayDate);
+    return createDefaultProfile(getTodayDateString());
   });
   const [missions, setMissions] = useState<Mission[]>(() => {
+    const today = getTodayDateString();
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MISSIONS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: Mission[] = JSON.parse(saved);
+        // Calibrate existing missions for current session so today's directives are available
+        const CALIBRATED_KEY = 'web_ascend_missions_calibrated_today_v2';
+        if (!localStorage.getItem(CALIBRATED_KEY)) {
+          localStorage.setItem(CALIBRATED_KEY, 'true');
+          return parsed.map((m) => ({
+            ...m,
+            date: today,
+            createdAt: Date.now(),
+          }));
+        }
+        return parsed.map((m) => ({
+          ...m,
+          date: m.date || (m.createdAt ? formatDateString(new Date(m.createdAt)) : today),
+        }));
+      }
     } catch {}
     return STARTER_MISSIONS.map((m, idx) => ({
       ...m,
       id: `m_${idx + 1}`,
-      createdAt: Date.now() - (4 - idx) * 86400000,
+      createdAt: Date.now(),
       updatedAt: Date.now(),
+      date: today,
     }));
   });
   const [habits, setHabits] = useState<Habit[]>(() => {
@@ -712,6 +751,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const mission = missions.find((m) => m.id === missionId);
       if (!mission) return;
 
+      const todayActiveMissions = missions.filter(
+        (m) => m.isActive && getMissionDate(m) === todayDate
+      );
+
       const todayRecord = dailyRecords[todayDate] || {
         date: todayDate,
         completedMissionIds: [],
@@ -719,7 +762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPerfectDay: false,
         xpEarned: 0,
         essenceEarned: 0,
-        totalRequiredMissions: missions.filter((m) => m.isActive && m.isRequired).length,
+        totalRequiredMissions: todayActiveMissions.filter((m) => m.isRequired).length,
         totalActiveHabits: habits.filter((h) => h.isActive).length,
         status: 'IN_PROGRESS',
       };
@@ -743,7 +786,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const isNowSuccessful = isSuccessfulConsistencyDay(
         nextMissionIds,
         todayRecord.completedHabitIds,
-        missions,
+        todayActiveMissions,
         habits
       );
 
@@ -895,6 +938,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const habit = habits.find((h) => h.id === habitId);
       if (!habit) return;
 
+      const todayActiveMissions = missions.filter(
+        (m) => m.isActive && getMissionDate(m) === todayDate
+      );
+
       const todayRecord = dailyRecords[todayDate] || {
         date: todayDate,
         completedMissionIds: [],
@@ -902,7 +949,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPerfectDay: false,
         xpEarned: 0,
         essenceEarned: 0,
-        totalRequiredMissions: missions.filter((m) => m.isActive && m.isRequired).length,
+        totalRequiredMissions: todayActiveMissions.filter((m) => m.isRequired).length,
         totalActiveHabits: habits.filter((h) => h.isActive).length,
         status: 'IN_PROGRESS',
       };
@@ -925,7 +972,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const isNowSuccessful = isSuccessfulConsistencyDay(
         todayRecord.completedMissionIds,
         nextHabitIds,
-        missions,
+        todayActiveMissions,
         habits
       );
 
@@ -1093,31 +1140,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Mission CRUD
   const createMission = useCallback(
-    async (data: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>) => {
+    async (data: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'> & { date?: string }) => {
       soundFX.playBlip();
+      const missionDate = data.date || todayDate;
+      const missionPayload = {
+        ...data,
+        date: missionDate,
+      };
+
       if (user) {
         setSyncStatus('SYNCING');
         try {
-          const created = await supabaseService.createMission(user.id, data);
+          const created = await supabaseService.createMission(user.id, missionPayload);
           if (created) {
-            setMissions((prev) => [created, ...prev]);
-            addNotification('MISSION INITIALIZED', `"${created.title}" stored in cloud database.`, 'SYSTEM');
+            setMissions((prev) => [{ ...created, date: missionDate }, ...prev]);
+            addNotification('MISSION INITIALIZED', `"${created.title}" assigned for today.`, 'SYSTEM');
             setSyncStatus('SYNCED');
           } else {
             const fallbackM: Mission = {
-              ...data,
+              ...missionPayload,
               id: `m_${Date.now()}`,
               createdAt: Date.now(),
               updatedAt: Date.now(),
             };
             setMissions((prev) => [fallbackM, ...prev]);
-            addNotification('MISSION INITIALIZED (LOCAL)', `"${data.title}" stored locally.`, 'SYSTEM');
+            addNotification('MISSION INITIALIZED (LOCAL)', `"${data.title}" assigned for today.`, 'SYSTEM');
             setSyncStatus('SYNCED');
           }
         } catch (err) {
           console.error('Failed to save mission to cloud:', err);
           const fallbackM: Mission = {
-            ...data,
+            ...missionPayload,
             id: `m_${Date.now()}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -1127,7 +1180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } else {
         const newM: Mission = {
-          ...data,
+          ...missionPayload,
           id: `m_${Date.now()}`,
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -1135,7 +1188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setMissions((prev) => [newM, ...prev]);
       }
     },
-    [user, addNotification]
+    [user, todayDate, addNotification]
   );
 
   const updateMission = useCallback(
@@ -1742,6 +1795,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const triggerAscendSimulation = simulateTierAscension;
 
+  // Advance simulation to the next calendar day to demonstrate one-day mission lifecycle
+  const simulateNextDay = useCallback(() => {
+    soundFX.playLevelUp();
+    const currentDateObj = parseDateString(todayDate);
+    const nextDateObj = new Date(currentDateObj.getFullYear(), currentDateObj.getMonth(), currentDateObj.getDate() + 1);
+    const nextDateStr = formatDateString(nextDateObj);
+
+    setTodayDate(nextDateStr);
+
+    setDailyRecords((prev) => {
+      if (prev[nextDateStr]) return prev;
+      return {
+        ...prev,
+        [nextDateStr]: {
+          date: nextDateStr,
+          completedMissionIds: [],
+          completedHabitIds: [],
+          isSuccessfulDay: false,
+          isPerfectDay: false,
+          xpEarned: 0,
+          essenceEarned: 0,
+          totalRequiredMissions: 0,
+          totalActiveHabits: habits.filter((h) => h.isActive).length,
+          status: 'IN_PROGRESS',
+        },
+      };
+    });
+
+    addNotification(
+      'NEXT DAY CYCLE SIMULATED',
+      `Date advanced to ${formatReadableDate(nextDateStr)}. Previous day's missions have vanished. Habits reset for the new cycle.`,
+      'SYSTEM'
+    );
+  }, [todayDate, habits, addNotification]);
+
+  const jumpToCurrentDate = useCallback(() => {
+    const current = getTodayDateString();
+    setTodayDate(current);
+    addNotification('CALENDAR SYNCHRONIZED', `Synchronized to current real-world date: ${formatReadableDate(current)}.`, 'SYSTEM');
+  }, [addNotification]);
+
+  const todayMissions = useMemo(() => {
+    return missions.filter((m) => {
+      if (!m.isActive) return false;
+      const mDate = getMissionDate(m);
+      return mDate === todayDate;
+    });
+  }, [missions, todayDate]);
+
   const resetAllData = useCallback(() => {
     localStorage.clear();
     window.location.reload();
@@ -1804,6 +1906,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       signOut,
       profile,
       missions,
+      todayMissions,
       habits,
       dailyRecords,
       xpTransactions,
@@ -1844,6 +1947,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       simulateSuccessfulDay,
       simulateTierAscension,
       triggerAscendSimulation,
+      simulateNextDay,
+      jumpToCurrentDate,
       resetAllData,
       exportData,
       importData,
@@ -1865,6 +1970,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       signOut,
       profile,
       missions,
+      todayMissions,
       habits,
       dailyRecords,
       xpTransactions,
@@ -1902,6 +2008,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       simulateSuccessfulDay,
       simulateTierAscension,
       triggerAscendSimulation,
+      simulateNextDay,
+      jumpToCurrentDate,
       resetAllData,
       exportData,
       importData,

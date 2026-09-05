@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Mission, Priority } from '../../types';
 import { BASE_REWARDS } from '../../config/progression';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Calendar, Clock } from 'lucide-react';
 
 interface MissionModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface MissionModalProps {
   onSave: (missionData: Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onDelete?: (id: string) => void;
   initialMission?: Mission | null;
+  targetDate?: string;
 }
 
 export const MissionModal: React.FC<MissionModalProps> = ({
@@ -18,6 +19,7 @@ export const MissionModal: React.FC<MissionModalProps> = ({
   onSave,
   onDelete,
   initialMission,
+  targetDate,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -59,6 +61,7 @@ export const MissionModal: React.FC<MissionModalProps> = ({
       essenceReward: Number(essenceReward) || BASE_REWARDS.missionEssence,
       isRequired,
       isActive,
+      date: initialMission?.date || targetDate,
     });
     onClose();
   };
@@ -68,9 +71,18 @@ export const MissionModal: React.FC<MissionModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={initialMission ? 'EDIT MISSION' : 'INITIALIZE MISSION'}
-      subtitle="SYSTEM PROTOCOL ENTRY"
+      subtitle="ONE-DAY TACTICAL DIRECTIVE"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-sm font-mono">
+        {/* One-Day Directive Notice */}
+        <div className="p-2.5 rounded-xl bg-red-950/25 border border-red-900/40 text-[11px] text-red-300 font-mono flex items-center gap-2.5">
+          <Clock className="w-4 h-4 text-red-400 shrink-0" />
+          <div>
+            <span className="font-bold text-red-200">ONE-DAY DIRECTIVE // </span>
+            <span className="text-slate-300">Active for today only. Vanishes on the next day cycle.</span>
+          </div>
+        </div>
+
         {/* Title */}
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-bold">
