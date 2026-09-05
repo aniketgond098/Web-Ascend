@@ -206,11 +206,28 @@ export const supabaseService = {
       await supabase.from('rewards').insert(rewardPayloads);
     }
 
-    // 7. Initial Notification
+    // 7. Starter Spidey Coins Allowance (50 coins)
+    const { data: existingCoins } = await supabase
+      .from('spidey_coin_transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+
+    if (!existingCoins || existingCoins.length === 0) {
+      await supabase.from('spidey_coin_transactions').insert({
+        user_id: userId,
+        amount: 50,
+        transaction_type: 'EARNED',
+        source_type: 'INITIAL',
+        description: 'Starter Operative Allowance',
+      });
+    }
+
+    // 8. Initial Notification
     await supabase.from('notifications').insert({
       user_id: userId,
       title: 'SYSTEM INITIALIZED',
-      message: `Welcome to WEB ASCEND, ${username}. Initialized at Rank E. Complete all required daily directives and protocols to ascend.`,
+      message: `Welcome to WEB ASCEND, ${username}. Initialized at Rank E with 50 Spidey Coins. Complete all required daily directives and protocols to ascend.`,
       type: 'SYSTEM',
     });
   },
@@ -276,8 +293,8 @@ export const supabaseService = {
 
     const levelRow = levelResult.data;
     const rankRow = rankResult.data;
-    const missionsRows = missionsResult.data;
-    const habitsRows = habitsResult.data;
+    let missionsRows = missionsResult.data || [];
+    let habitsRows = habitsResult.data || [];
     const dailyProgressRows = dailyProgressResult.data;
     const missionCompletionsRows = missionCompletionsResult.data;
     const habitCompletionsRows = habitCompletionsResult.data;
@@ -288,8 +305,57 @@ export const supabaseService = {
     const purchasesRows = purchasesResult.data;
     const notifRows = notifResult.data;
 
+    // If cloud missions are empty, seed starter missions to database
+    if (missionsRows.length === 0) {
+      try {
+        const missionsToInsert = STARTER_MISSIONS.map((m) => ({
+          user_id: userId,
+          title: m.title,
+          description: m.description,
+          priority: m.priority,
+          xp_reward: m.xpReward,
+          spidey_coin_reward: m.essenceReward,
+          required: m.isRequired,
+          active: m.isActive,
+        }));
+        const { data: insertedMissions } = await supabase
+          .from('missions')
+          .insert(missionsToInsert)
+          .select('*');
+        if (insertedMissions && insertedMissions.length > 0) {
+          missionsRows = insertedMissions;
+        }
+      } catch (err) {
+        console.warn('Auto-seed missions notice:', err);
+      }
+    }
+
+    // If cloud habits are empty, seed starter habits to database
+    if (habitsRows.length === 0) {
+      try {
+        const habitsToInsert = STARTER_HABITS.map((h) => ({
+          user_id: userId,
+          name: h.name,
+          description: h.description,
+          frequency: 'DAILY',
+          xp_reward: h.xpReward,
+          spidey_coin_reward: h.essenceReward,
+          active: h.isActive,
+        }));
+        const { data: insertedHabits } = await supabase
+          .from('habits')
+          .insert(habitsToInsert)
+          .select('*');
+        if (insertedHabits && insertedHabits.length > 0) {
+          habitsRows = insertedHabits;
+        }
+      } catch (err) {
+        console.warn('Auto-seed habits notice:', err);
+      }
+    }
+
     // Transform Missions
-    const missions: Mission[] = (missionsRows || []).map((m) => ({
+    const missions: Mission[] = missionsRows.map((m) => ({
       id: m.id,
       title: m.title,
       description: m.description || '',
@@ -302,18 +368,60 @@ export const supabaseService = {
       updatedAt: new Date(m.updated_at).getTime(),
     }));
 
+    // Map habit completion dates for streak calculation
+    const habitDatesMap: Record<string, Set<string>> = {};
+    (habitCompletionsRows || []).forEach((hc) => {
+      if (!habitDatesMap[hc.habit_id]) {
+        habitDatesMap[hc.habit_id] = new Set();
+      }
+      habitDatesMap[hc.habit_id].add(hc.completion_date);
+    });
+
+    // Helper to calculate streak from distinct dates
+    const calculateHabitStreak = (datesSet: Set<string> | undefined, referenceDateStr: string): { currentStreak: number; longestStreak: number } => {
+      if (!datesSet || datesSet.size === 0) return { currentStreak: 0, longestStreak: 0 };
+      const sortedDates = Array.from(datesSet).sort().reverse();
+      
+      let currentStreak = 0;
+      let checkDate = new Date(`${referenceDateStr}T12:00:00Z`);
+      const todayStr = checkDate.toISOString().split('T')[0];
+      
+      // If completed today, count today; if not, count from yesterday
+      if (!datesSet.has(todayStr)) {
+        checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+      }
+
+      while (true) {
+        const dStr = checkDate.toISOString().split('T')[0];
+        if (datesSet.has(dStr)) {
+          currentStreak++;
+          checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      return {
+        currentStreak,
+        longestStreak: Math.max(currentStreak, datesSet.size),
+      };
+    };
+
     // Transform Habits
-    const habits: Habit[] = (habitsRows || []).map((h) => ({
-      id: h.id,
-      name: h.name,
-      description: h.description || '',
-      xpReward: h.xp_reward,
-      essenceReward: h.spidey_coin_reward,
-      isActive: h.active,
-      currentStreak: 0,
-      longestStreak: 0,
-      createdAt: new Date(h.created_at).getTime(),
-    }));
+    const habits: Habit[] = habitsRows.map((h) => {
+      const streakInfo = calculateHabitStreak(habitDatesMap[h.id], todayDate);
+      return {
+        id: h.id,
+        name: h.name,
+        description: h.description || '',
+        xpReward: h.xp_reward,
+        essenceReward: h.spidey_coin_reward,
+        isActive: h.active,
+        currentStreak: streakInfo.currentStreak,
+        longestStreak: streakInfo.longestStreak,
+        createdAt: new Date(h.created_at).getTime(),
+      };
+    });
 
     // Group completions by date for daily records
     const missionCompletionsByDate: Record<string, string[]> = {};
@@ -483,7 +591,7 @@ export const supabaseService = {
 
   /**
    * Toggle Mission Completion
-   * Prevents duplicate rewards when toggled repeatedly.
+   * Prevents duplicate rewards when toggled repeatedly and revokes cleanly on uncheck.
    */
   async toggleMission(
     userId: string,
@@ -492,7 +600,8 @@ export const supabaseService = {
     mission: Mission,
     allMissions: Mission[],
     allHabits: Habit[],
-    todayRecords: Record<string, DailyRecord>
+    todayRecords: Record<string, DailyRecord>,
+    targetCompleted?: boolean
   ): Promise<{
     completed: boolean;
     xpDelta: number;
@@ -502,15 +611,52 @@ export const supabaseService = {
     const xpReward = mission.xpReward || BASE_REWARDS.missionXP;
     const coinsReward = mission.essenceReward || BASE_REWARDS.missionEssence;
 
+    // Ensure missionId is a valid UUID in Supabase
+    let resolvedMissionId = missionId;
+    if (!isUUID(resolvedMissionId)) {
+      try {
+        const { data: existingM } = await supabase
+          .from('missions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('title', mission.title)
+          .maybeSingle();
+
+        if (existingM) {
+          resolvedMissionId = existingM.id;
+        } else {
+          const { data: createdM } = await supabase
+            .from('missions')
+            .insert({
+              user_id: userId,
+              title: mission.title,
+              description: mission.description || '',
+              priority: mission.priority,
+              xp_reward: xpReward,
+              spidey_coin_reward: coinsReward,
+              required: mission.isRequired,
+              active: mission.isActive,
+            })
+            .select('id')
+            .single();
+          if (createdM) {
+            resolvedMissionId = createdM.id;
+          }
+        }
+      } catch (e) {
+        console.warn('Error resolving mission UUID:', e);
+      }
+    }
+
     let existing = false;
     let existingId: string | null = null;
 
-    if (isUUID(missionId)) {
+    if (isUUID(resolvedMissionId)) {
       const { data } = await supabase
         .from('mission_completions')
         .select('id')
         .eq('user_id', userId)
-        .eq('mission_id', missionId)
+        .eq('mission_id', resolvedMissionId)
         .eq('completion_date', date)
         .maybeSingle();
       if (data) {
@@ -521,52 +667,69 @@ export const supabaseService = {
       existing = !!todayRecords[date]?.completedMissionIds?.includes(missionId);
     }
 
+    const shouldComplete = targetCompleted !== undefined ? targetCompleted : !existing;
     let completed = false;
     let xpDelta = 0;
     let coinsDelta = 0;
 
-    if (existing) {
+    if (!shouldComplete) {
       // Uncomplete: Remove completion record and revoke XP & Coin transactions
-      if (isUUID(missionId) && existingId) {
+      if (isUUID(resolvedMissionId)) {
         await supabase
           .from('mission_completions')
           .delete()
-          .eq('id', existingId);
+          .eq('user_id', userId)
+          .eq('mission_id', resolvedMissionId)
+          .eq('completion_date', date);
 
         await supabase
           .from('xp_transactions')
           .delete()
           .eq('user_id', userId)
           .eq('source_type', 'MISSION')
-          .eq('source_id', missionId)
+          .eq('source_id', resolvedMissionId)
           .eq('transaction_date', date);
 
-        await supabase
+        const { error: coinDelErr, count: coinDelCount } = await supabase
           .from('spidey_coin_transactions')
           .delete()
           .eq('user_id', userId)
           .eq('source_type', 'MISSION')
-          .eq('source_id', missionId);
+          .eq('source_id', resolvedMissionId)
+          .gte('created_at', `${date}T00:00:00Z`)
+          .lte('created_at', `${date}T23:59:59.999Z`);
+
+        // If delete was blocked by RLS or 0 rows deleted, insert compensating negative transaction
+        if (coinDelErr || (coinDelCount !== null && coinDelCount === 0)) {
+          await supabase.from('spidey_coin_transactions').insert({
+            user_id: userId,
+            amount: -coinsReward,
+            transaction_type: 'SPENT',
+            source_type: 'MISSION',
+            source_id: resolvedMissionId,
+            description: `Revoked: ${mission.title}`,
+          });
+        }
       }
 
       completed = false;
       xpDelta = -xpReward;
       coinsDelta = -coinsReward;
     } else {
-      // Complete: Insert completion record & award XP and Coins
-      if (isUUID(missionId)) {
-        await supabase.from('mission_completions').insert({
+      // Complete: Upsert completion record & award XP and Coins
+      if (isUUID(resolvedMissionId)) {
+        await supabase.from('mission_completions').upsert({
           user_id: userId,
-          mission_id: missionId,
+          mission_id: resolvedMissionId,
           completion_date: date,
           reward_granted: true,
-        });
+        }, { onConflict: 'user_id, mission_id, completion_date' });
 
         await supabase.from('xp_transactions').insert({
           user_id: userId,
           amount: xpReward,
           source_type: 'MISSION',
-          source_id: missionId,
+          source_id: resolvedMissionId,
           transaction_date: date,
         });
 
@@ -575,7 +738,7 @@ export const supabaseService = {
           amount: coinsReward,
           transaction_type: 'EARNED',
           source_type: 'MISSION',
-          source_id: missionId,
+          source_id: resolvedMissionId,
           description: `Completed: ${mission.title}`,
         });
       }
@@ -602,7 +765,8 @@ export const supabaseService = {
     habit: Habit,
     allMissions: Mission[],
     allHabits: Habit[],
-    todayRecords: Record<string, DailyRecord>
+    todayRecords: Record<string, DailyRecord>,
+    targetCompleted?: boolean
   ): Promise<{
     completed: boolean;
     xpDelta: number;
@@ -612,15 +776,51 @@ export const supabaseService = {
     const xpReward = habit.xpReward || BASE_REWARDS.habitXP;
     const coinsReward = habit.essenceReward || BASE_REWARDS.habitEssence;
 
+    // Ensure habitId is a valid UUID in Supabase
+    let resolvedHabitId = habitId;
+    if (!isUUID(resolvedHabitId)) {
+      try {
+        const { data: existingH } = await supabase
+          .from('habits')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('name', habit.name)
+          .maybeSingle();
+
+        if (existingH) {
+          resolvedHabitId = existingH.id;
+        } else {
+          const { data: createdH } = await supabase
+            .from('habits')
+            .insert({
+              user_id: userId,
+              name: habit.name,
+              description: habit.description || '',
+              frequency: 'DAILY',
+              xp_reward: xpReward,
+              spidey_coin_reward: coinsReward,
+              active: habit.isActive,
+            })
+            .select('id')
+            .single();
+          if (createdH) {
+            resolvedHabitId = createdH.id;
+          }
+        }
+      } catch (e) {
+        console.warn('Error resolving habit UUID:', e);
+      }
+    }
+
     let existing = false;
     let existingId: string | null = null;
 
-    if (isUUID(habitId)) {
+    if (isUUID(resolvedHabitId)) {
       const { data } = await supabase
         .from('habit_completions')
         .select('id')
         .eq('user_id', userId)
-        .eq('habit_id', habitId)
+        .eq('habit_id', resolvedHabitId)
         .eq('completion_date', date)
         .maybeSingle();
       if (data) {
@@ -631,52 +831,69 @@ export const supabaseService = {
       existing = !!todayRecords[date]?.completedHabitIds?.includes(habitId);
     }
 
+    const shouldComplete = targetCompleted !== undefined ? targetCompleted : !existing;
     let completed = false;
     let xpDelta = 0;
     let coinsDelta = 0;
 
-    if (existing) {
+    if (!shouldComplete) {
       // Uncomplete: Remove completion record and revoke XP & Coin transactions
-      if (isUUID(habitId) && existingId) {
+      if (isUUID(resolvedHabitId)) {
         await supabase
           .from('habit_completions')
           .delete()
-          .eq('id', existingId);
+          .eq('user_id', userId)
+          .eq('habit_id', resolvedHabitId)
+          .eq('completion_date', date);
 
         await supabase
           .from('xp_transactions')
           .delete()
           .eq('user_id', userId)
           .eq('source_type', 'HABIT')
-          .eq('source_id', habitId)
+          .eq('source_id', resolvedHabitId)
           .eq('transaction_date', date);
 
-        await supabase
+        const { error: coinDelErr, count: coinDelCount } = await supabase
           .from('spidey_coin_transactions')
           .delete()
           .eq('user_id', userId)
           .eq('source_type', 'HABIT')
-          .eq('source_id', habitId);
+          .eq('source_id', resolvedHabitId)
+          .gte('created_at', `${date}T00:00:00Z`)
+          .lte('created_at', `${date}T23:59:59.999Z`);
+
+        // If delete was blocked by RLS or 0 rows deleted, insert compensating negative transaction
+        if (coinDelErr || (coinDelCount !== null && coinDelCount === 0)) {
+          await supabase.from('spidey_coin_transactions').insert({
+            user_id: userId,
+            amount: -coinsReward,
+            transaction_type: 'SPENT',
+            source_type: 'HABIT',
+            source_id: resolvedHabitId,
+            description: `Revoked Protocol: ${habit.name}`,
+          });
+        }
       }
 
       completed = false;
       xpDelta = -xpReward;
       coinsDelta = -coinsReward;
     } else {
-      // Complete: Insert completion record & award XP and Coins
-      if (isUUID(habitId)) {
-        await supabase.from('habit_completions').insert({
+      // Complete: Upsert completion record & award XP and Coins
+      if (isUUID(resolvedHabitId)) {
+        await supabase.from('habit_completions').upsert({
           user_id: userId,
-          habit_id: habitId,
+          habit_id: resolvedHabitId,
           completion_date: date,
           reward_granted: true,
-        });
+        }, { onConflict: 'user_id, habit_id, completion_date' });
 
         await supabase.from('xp_transactions').insert({
           user_id: userId,
           amount: xpReward,
           source_type: 'HABIT',
-          source_id: habitId,
+          source_id: resolvedHabitId,
           transaction_date: date,
         });
 
@@ -685,7 +902,7 @@ export const supabaseService = {
           amount: coinsReward,
           transaction_type: 'EARNED',
           source_type: 'HABIT',
-          source_id: habitId,
+          source_id: resolvedHabitId,
           description: `Protocol: ${habit.name}`,
         });
       }
@@ -790,11 +1007,36 @@ export const supabaseService = {
         .eq('source_type', 'PERFECT_DAY')
         .eq('transaction_date', date);
 
-      await supabase
+      const { error: delCoinBonusErr, count: bonusCount } = await supabase
         .from('spidey_coin_transactions')
         .delete()
         .eq('user_id', userId)
-        .eq('source_type', 'PERFECT_DAY');
+        .eq('source_type', 'PERFECT_DAY')
+        .gte('created_at', `${date}T00:00:00Z`)
+        .lte('created_at', `${date}T23:59:59.999Z`);
+
+      // If delete failed or did not remove rows, check if an EARNED bonus exists for today and insert compensating SPENT row
+      if (delCoinBonusErr || (bonusCount !== null && bonusCount === 0)) {
+        const { data: hasBonus } = await supabase
+          .from('spidey_coin_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('source_type', 'PERFECT_DAY')
+          .eq('transaction_type', 'EARNED')
+          .gte('created_at', `${date}T00:00:00Z`)
+          .lte('created_at', `${date}T23:59:59.999Z`)
+          .maybeSingle();
+
+        if (hasBonus) {
+          await supabase.from('spidey_coin_transactions').insert({
+            user_id: userId,
+            amount: -BASE_REWARDS.perfectDayEssence,
+            transaction_type: 'SPENT',
+            source_type: 'PERFECT_DAY',
+            description: 'Revoked: Perfect Day Bonus',
+          });
+        }
+      }
     }
 
     // Sync rank progression based on total successful days count
@@ -1281,5 +1523,30 @@ export const supabaseService = {
       message: 'Local browser progress was successfully synchronized into your permanent Supabase cloud account.',
       type: 'SYSTEM',
     });
+  },
+
+  /**
+   * Calibrate / Reset Spidey Coins to target value (e.g. 50)
+   */
+  async calibrateSpideyCoins(userId: string, targetCoins: number = 50): Promise<number> {
+    const { data: coinTxs } = await supabase
+      .from('spidey_coin_transactions')
+      .select('amount')
+      .eq('user_id', userId);
+
+    const currentBalance = (coinTxs || []).reduce((acc, tx) => acc + (tx.amount || 0), 0);
+    const delta = targetCoins - currentBalance;
+
+    if (delta !== 0) {
+      await supabase.from('spidey_coin_transactions').insert({
+        user_id: userId,
+        amount: delta,
+        transaction_type: delta > 0 ? 'EARNED' : 'SPENT',
+        source_type: delta > 0 ? 'INITIAL' : 'PURCHASE',
+        description: `Balance Calibration: Reset to ${targetCoins} Spidey Coins`,
+      });
+    }
+
+    return targetCoins;
   },
 };

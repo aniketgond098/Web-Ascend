@@ -32,6 +32,7 @@ export const RewardsView: React.FC = () => {
     createReward,
     updateReward,
     deleteReward,
+    setSpideyCoins,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'MARKET' | 'LEDGER'>('MARKET');
@@ -104,8 +105,17 @@ export const RewardsView: React.FC = () => {
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#0A0E17] to-amber-950/20 border border-amber-500/40 font-mono shadow-[0_0_15px_rgba(245,158,11,0.1)]">
             <SpideyCoinIcon size={24} />
             <div>
-              <p className="text-[10px] text-amber-400/80 uppercase tracking-wider font-bold">AVAILABLE BALANCE</p>
-              <p className="text-base font-bold text-white leading-none font-['Chakra_Petch']">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] text-amber-400/80 uppercase tracking-wider font-bold">AVAILABLE BALANCE</p>
+                <button
+                  onClick={() => setSpideyCoins(50)}
+                  title="Calibrate / Reset balance to 50 Spidey Coins"
+                  className="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/25 text-amber-400 hover:text-amber-300 border border-amber-500/30 text-[9px] font-mono font-bold tracking-wider transition-all active:scale-95 cursor-pointer"
+                >
+                  RESET 50
+                </button>
+              </div>
+              <p className="text-base font-bold text-white leading-none font-['Chakra_Petch'] mt-0.5">
                 {profile.currentEssence.toLocaleString()} <span className="text-amber-300 text-xs">SPIDEY COINS</span>
               </p>
             </div>
@@ -329,20 +339,31 @@ export const RewardsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1 bg-[#0F141F] p-1 rounded-xl border border-blue-900/30 text-xs">
-              {(['ALL', 'EARNED', 'SPENT'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setLedgerFilter(tab)}
-                  className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                    ledgerFilter === tab
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSpideyCoins(50)}
+                className="px-2.5 py-1.5 rounded-xl text-[11px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                title="Reset Spidey Coins balance to 50"
+              >
+                <SpideyCoinIcon size={12} />
+                <span>RESET TO 50</span>
+              </button>
+
+              <div className="flex items-center gap-1 bg-[#0F141F] p-1 rounded-xl border border-blue-900/30 text-xs">
+                {(['ALL', 'EARNED', 'SPENT'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setLedgerFilter(tab)}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      ledgerFilter === tab
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

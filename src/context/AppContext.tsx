@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   UserProfile,
   RankTier,
@@ -120,6 +120,7 @@ interface AppContextType {
   refreshCloudData: () => Promise<void>;
   reloadAuthAndConfig: () => Promise<void>;
   setUserAndSync: (newUser: any) => Promise<void>;
+  setSpideyCoins: (amount?: number) => Promise<void>;
 
   // Simulation & Testing
   reinitializeOperative: () => Promise<void>;
@@ -151,8 +152,8 @@ const createDefaultProfile = (today: string, username?: string): UserProfile => 
     totalSuccessfulDays: 0,
     consistencyDaysCompleted: 0,
     totalXP: 0,
-    currentEssence: 0,
-    totalEssenceEarned: 0,
+    currentEssence: 50,
+    totalEssenceEarned: 50,
     currentStreak: 0,
     longestStreak: 0,
     soundEnabled: true,
@@ -196,6 +197,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const savedCustomUsername = localStorage.getItem('web_ascend_custom_username');
         if (savedCustomUsername && savedCustomUsername.trim() && (!parsed.username || parsed.username === 'OPERATIVE' || parsed.username === 'Operative')) {
           parsed.username = savedCustomUsername.trim();
+        }
+        // One-time initialization calibration to 50 Spidey Coins
+        if (!localStorage.getItem('web_ascend_coins_reset_to_50_v2')) {
+          parsed.currentEssence = 50;
+          parsed.totalEssenceEarned = Math.max(50, parsed.totalEssenceEarned || 0);
         }
         return parsed;
       }
@@ -259,7 +265,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [];
+    return [
+      {
+        id: `cointx_init_${Date.now()}`,
+        amount: 50,
+        source: 'INITIAL',
+        description: 'Starter Operative Allowance',
+        timestamp: Date.now(),
+        date: todayDate,
+      },
+    ];
   });
   const [rewards, setRewards] = useState<Reward[]>(() => {
     try {
@@ -361,17 +376,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('supabase_config_updated', handleConfigEvent);
   }, [reloadAuthAndConfig]);
 
+  const lastSyncTimeRef = useRef<number>(Date.now());
+
   // Run missing tables check on mount / config change
   useEffect(() => {
     checkMissingTables();
   }, [checkMissingTables, configVersion]);
 
   // Load data from Supabase for authenticated user
-  const loadCloudData = useCallback(async (userId: string) => {
-    setDataLoading(true);
+  const loadCloudData = useCallback(async (userId: string, isBackgroundSync: boolean = false) => {
+    if (!isBackgroundSync) setDataLoading(true);
     setSyncStatus('SYNCING');
     try {
       const data = await supabaseService.fetchAllUserData(userId, todayDate);
+      lastSyncTimeRef.current = Date.now();
 
       // Preserve custom codename if cloud profile returned generic default 'OPERATIVE'
       let finalUsername = data.profile.username;
@@ -386,6 +404,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : localCustomName!;
         
         supabaseService.updateProfile(userId, { username: finalUsername }).catch(console.warn);
+      }
+
+      // One-time calibration to 50 Spidey Coins for this user
+      const userCoinsResetKey = `web_ascend_coins_reset_to_50_user_${userId}`;
+      if (!localStorage.getItem(userCoinsResetKey)) {
+        localStorage.setItem(userCoinsResetKey, 'true');
+        if (data.profile.currentEssence !== 50) {
+          await supabaseService.calibrateSpideyCoins(userId, 50);
+          data.profile.currentEssence = 50;
+          data.profile.totalEssenceEarned = Math.max(50, data.profile.totalEssenceEarned);
+          const currentSum = data.coinTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+          const delta = 50 - currentSum;
+          if (delta !== 0) {
+            data.coinTransactions = [
+              {
+                id: `cointx_reset_${Date.now()}`,
+                amount: delta,
+                source: 'INITIAL',
+                description: 'Spidey Coins calibrated to 50',
+                timestamp: Date.now(),
+                date: todayDate,
+              },
+              ...data.coinTransactions,
+            ];
+          }
+        }
       }
 
       const mergedProfile: UserProfile = {
@@ -403,7 +447,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setMissions(data.missions);
       setHabits(data.habits);
-      setDailyRecords(data.dailyRecords);
+
+      // Merge daily records for today to protect in-flight and active toggles from being overwritten
+      setDailyRecords((prev) => {
+        const cloudRecords = data.dailyRecords || {};
+        const localToday = prev[todayDate];
+        const cloudToday = cloudRecords[todayDate];
+
+        if (!localToday) {
+          return cloudRecords;
+        }
+
+        const mergedMissions = Array.from(new Set([
+          ...(cloudToday?.completedMissionIds || []),
+          ...(localToday.completedMissionIds || []),
+        ]));
+        const mergedHabits = Array.from(new Set([
+          ...(cloudToday?.completedHabitIds || []),
+          ...(localToday.completedHabitIds || []),
+        ]));
+
+        const isSuccessful = !!(cloudToday?.isSuccessfulDay || localToday.isSuccessfulDay);
+
+        return {
+          ...cloudRecords,
+          [todayDate]: {
+            ...(cloudToday || localToday),
+            completedMissionIds: mergedMissions,
+            completedHabitIds: mergedHabits,
+            isSuccessfulDay: isSuccessful,
+            isPerfectDay: isSuccessful,
+            status: isSuccessful ? 'PERFECT' : ((mergedMissions.length > 0 || mergedHabits.length > 0) ? 'PARTIAL' : 'IN_PROGRESS'),
+          },
+        };
+      });
+
       setXpTransactions(data.xpTransactions);
       setEssenceTransactions(data.coinTransactions);
       setRewards(data.rewards);
@@ -522,15 +600,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [loadCloudData, todayDate, configVersion]);
 
-  // Periodic or focus synchronization
+  // Periodic or focus synchronization (throttled to avoid race conditions with local clicks/toggles)
   useEffect(() => {
     if (!user) return;
     const handleFocus = () => {
-      loadCloudData(user.id);
+      if (Date.now() - lastSyncTimeRef.current > 120000 && syncStatus !== 'SYNCING') {
+        loadCloudData(user.id, true);
+      }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [user, loadCloudData]);
+  }, [user, loadCloudData, syncStatus]);
 
   // Notification helper
   const addNotification = useCallback(
@@ -710,7 +790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProfile((prev) => {
         const newTotalXP = Math.max(0, prev.totalXP + xpDelta);
         const newCurrentEssence = Math.max(0, prev.currentEssence + coinsDelta);
-        const newTotalEssenceEarned = Math.max(0, prev.totalEssenceEarned + (coinsDelta > 0 ? coinsDelta : 0));
+        const newTotalEssenceEarned = Math.max(0, prev.totalEssenceEarned + coinsDelta);
         const computedLevel = getLevelProgress(newTotalXP).level;
 
         let newTotalDays = prev.totalSuccessfulDays;
@@ -771,9 +851,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           addNotification('SUCCESSFUL DAY SECURED', 'All required daily directives and protocols completed! +1 Day added to Rank progression.', 'RANK_PROGRESS');
         }
       } else {
-        // Unchecked: purge rewards from ledger
-        setXpTransactions((prev) => prev.filter((tx) => !(tx.sourceId === missionId && tx.date === todayDate)));
-        setEssenceTransactions((prev) => prev.filter((tx) => !(tx.sourceId === missionId && tx.date === todayDate)));
+        // Unchecked: purge rewards from ledger (including Perfect Day bonus if day is no longer perfect)
+        setXpTransactions((prev) => prev.filter((tx) => {
+          if (tx.sourceId === missionId && tx.date === todayDate) return false;
+          if (wasSuccessful && !isNowSuccessful && tx.source === 'PERFECT_DAY' && tx.date === todayDate) return false;
+          return true;
+        }));
+        setEssenceTransactions((prev) => prev.filter((tx) => {
+          if (tx.sourceId === missionId && tx.date === todayDate) return false;
+          if (wasSuccessful && !isNowSuccessful && tx.source === 'PERFECT_DAY' && tx.date === todayDate) return false;
+          return true;
+        }));
       }
 
       // Cloud Persistence
@@ -787,12 +875,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             mission,
             missions,
             habits,
-            dailyRecords
+            dailyRecords,
+            !isCurrentlyDone
           );
-
-          if (isNowSuccessful && !wasSuccessful) {
-            await loadCloudData(user.id);
-          }
 
           setSyncStatus('SYNCED');
         } catch (err) {
@@ -907,7 +992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProfile((prev) => {
         const newTotalXP = Math.max(0, prev.totalXP + xpDelta);
         const newCurrentEssence = Math.max(0, prev.currentEssence + coinsDelta);
-        const newTotalEssenceEarned = Math.max(0, prev.totalEssenceEarned + (coinsDelta > 0 ? coinsDelta : 0));
+        const newTotalEssenceEarned = Math.max(0, prev.totalEssenceEarned + coinsDelta);
         const computedLevel = getLevelProgress(newTotalXP).level;
 
         let newTotalDays = prev.totalSuccessfulDays;
@@ -968,9 +1053,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           addNotification('SUCCESSFUL DAY SECURED', 'All required daily directives and protocols completed! +1 Day added to Rank progression.', 'RANK_PROGRESS');
         }
       } else {
-        // Unchecked: purge rewards from ledger
-        setXpTransactions((prev) => prev.filter((tx) => !(tx.sourceId === habitId && tx.date === todayDate)));
-        setEssenceTransactions((prev) => prev.filter((tx) => !(tx.sourceId === habitId && tx.date === todayDate)));
+        // Unchecked: purge rewards from ledger (including Perfect Day bonus if day is no longer perfect)
+        setXpTransactions((prev) => prev.filter((tx) => {
+          if (tx.sourceId === habitId && tx.date === todayDate) return false;
+          if (wasSuccessful && !isNowSuccessful && tx.source === 'PERFECT_DAY' && tx.date === todayDate) return false;
+          return true;
+        }));
+        setEssenceTransactions((prev) => prev.filter((tx) => {
+          if (tx.sourceId === habitId && tx.date === todayDate) return false;
+          if (wasSuccessful && !isNowSuccessful && tx.source === 'PERFECT_DAY' && tx.date === todayDate) return false;
+          return true;
+        }));
       }
 
       // Cloud Persistence
@@ -984,12 +1077,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             habit,
             missions,
             habits,
-            dailyRecords
+            dailyRecords,
+            !isCurrentlyDone
           );
-
-          if (isNowSuccessful && !wasSuccessful) {
-            await loadCloudData(user.id);
-          }
 
           setSyncStatus('SYNCED');
         } catch (err) {
@@ -1491,13 +1581,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     ];
 
+    const startingCoinTx: EssenceTransaction = {
+      id: `cointx_init_${Date.now()}`,
+      amount: 50,
+      source: 'INITIAL',
+      description: 'Starter Operative Allowance',
+      timestamp: Date.now(),
+      date: todayDate,
+    };
+
     // 1. Update React states immediately
     setProfile(cleanProfile);
     setMissions(cleanMissions);
     setHabits(cleanHabits);
     setDailyRecords(cleanDailyRecords);
     setXpTransactions([]);
-    setEssenceTransactions([]);
+    setEssenceTransactions([startingCoinTx]);
     setRewards(cleanRewards);
     setPurchases([]);
     setNotifications(cleanNotifs);
@@ -1509,7 +1608,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(cleanHabits));
       localStorage.setItem(STORAGE_KEYS.DAILY_RECORDS, JSON.stringify(cleanDailyRecords));
       localStorage.setItem(STORAGE_KEYS.XP_TRANSACTIONS, JSON.stringify([]));
-      localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify([]));
+      localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify([startingCoinTx]));
       localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(cleanRewards));
       localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify([]));
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cleanNotifs));
@@ -1530,6 +1629,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
   }, [todayDate, profile.username, user, loadCloudData]);
+
+  // Calibrate / Reset Spidey Coins to target value (default 50)
+  const setSpideyCoins = useCallback(
+    async (targetAmount: number = 50) => {
+      soundFX.playClaim();
+      setProfile((prev) => {
+        const next = {
+          ...prev,
+          currentEssence: targetAmount,
+          totalEssenceEarned: Math.max(targetAmount, prev.totalEssenceEarned),
+        };
+        try {
+          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      setEssenceTransactions((prev) => {
+        const currentSum = prev.reduce((acc, tx) => acc + tx.amount, 0);
+        const delta = targetAmount - currentSum;
+        if (delta === 0) return prev;
+        const resetTx: EssenceTransaction = {
+          id: `cointx_reset_${Date.now()}`,
+          amount: delta,
+          source: 'INITIAL',
+          description: `Balance Calibration: Reset to ${targetAmount} Spidey Coins`,
+          timestamp: Date.now(),
+          date: todayDate,
+        };
+        const updated = [resetTx, ...prev];
+        try {
+          localStorage.setItem(STORAGE_KEYS.ESSENCE_TRANSACTIONS, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      addNotification(
+        'COINS CALIBRATED',
+        `Spidey Coins balance has been calibrated to ${targetAmount}.`,
+        'SYSTEM'
+      );
+
+      if (user) {
+        try {
+          await supabaseService.calibrateSpideyCoins(user.id, targetAmount);
+          setSyncStatus('SYNCED');
+        } catch (err) {
+          console.warn('Failed to calibrate coins in Supabase:', err);
+        }
+      }
+    },
+    [todayDate, user, addNotification]
+  );
+
+  // Auto-reset Spidey Coins to 50 on initial load
+  useEffect(() => {
+    const RESET_KEY = 'web_ascend_coins_reset_to_50_v2';
+    if (!localStorage.getItem(RESET_KEY)) {
+      localStorage.setItem(RESET_KEY, 'true');
+      setSpideyCoins(50);
+    }
+  }, [setSpideyCoins]);
 
   // Simulation helpers
   const resetTestProgression = useCallback(() => {
@@ -1677,6 +1838,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshCloudData,
       reloadAuthAndConfig,
       setUserAndSync,
+      setSpideyCoins,
       reinitializeOperative,
       resetTestProgression,
       simulateSuccessfulDay,
@@ -1734,6 +1896,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshCloudData,
       reloadAuthAndConfig,
       setUserAndSync,
+      setSpideyCoins,
       reinitializeOperative,
       resetTestProgression,
       simulateSuccessfulDay,

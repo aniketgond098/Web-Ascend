@@ -269,6 +269,35 @@ class SoundFX {
       // Silent error
     }
   }
+
+  /**
+   * Spidey Coin balance claim / calibration sound
+   */
+  public playClaim() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(659.25, now); // E5
+      osc.frequency.setValueAtTime(987.77, now + 0.08); // B5
+
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } catch {
+      // Silent error
+    }
+  }
 }
 
 export const soundFX = new SoundFX();

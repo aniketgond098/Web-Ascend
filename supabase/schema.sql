@@ -148,12 +148,9 @@ CREATE TABLE IF NOT EXISTS public.xp_transactions (
 
 ALTER TABLE public.xp_transactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own XP transactions"
-    ON public.xp_transactions FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert XP transactions"
-    ON public.xp_transactions FOR INSERT
+CREATE POLICY "Users can manage their own XP transactions"
+    ON public.xp_transactions FOR ALL
+    USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS idx_xp_tx_user_source ON public.xp_transactions(user_id, source_type, source_id, transaction_date);
@@ -174,12 +171,9 @@ CREATE TABLE IF NOT EXISTS public.spidey_coin_transactions (
 
 ALTER TABLE public.spidey_coin_transactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own Spidey Coin transactions"
-    ON public.spidey_coin_transactions FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert Spidey Coin transactions"
-    ON public.spidey_coin_transactions FOR INSERT
+CREATE POLICY "Users can manage their own Spidey Coin transactions"
+    ON public.spidey_coin_transactions FOR ALL
+    USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS idx_coin_tx_user_created ON public.spidey_coin_transactions(user_id, created_at);
