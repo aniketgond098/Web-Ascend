@@ -233,7 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const today = getTodayDateString();
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MISSIONS);
-      if (saved) {
+      if (saved !== null) {
         const parsed: Mission[] = JSON.parse(saved);
         // Calibrate existing missions for current session so today's directives are available
         const CALIBRATED_KEY = 'web_ascend_missions_calibrated_today_v2';
@@ -251,6 +251,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }));
       }
     } catch {}
+    const initialized = localStorage.getItem('web_ascend_missions_initialized');
+    if (initialized) return [];
+    localStorage.setItem('web_ascend_missions_initialized', 'true');
     return STARTER_MISSIONS.map((m, idx) => ({
       ...m,
       id: `m_${idx + 1}`,
@@ -262,8 +265,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [habits, setHabits] = useState<Habit[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.HABITS);
-      if (saved) return JSON.parse(saved);
+      if (saved !== null) return JSON.parse(saved);
     } catch {}
+    const initialized = localStorage.getItem('web_ascend_habits_initialized');
+    if (initialized) return [];
+    localStorage.setItem('web_ascend_habits_initialized', 'true');
     return STARTER_HABITS.map((h, idx) => ({
       ...h,
       id: `h_${idx + 1}`,
@@ -484,8 +490,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch {}
 
-      setMissions(data.missions);
-      setHabits(data.habits);
+      // Respect locally deleted missions and habits tombstones
+      let cloudMissions = data.missions || [];
+      try {
+        const deletedMissionsRaw = localStorage.getItem('web_ascend_deleted_missions');
+        if (deletedMissionsRaw) {
+          const deletedSet: string[] = JSON.parse(deletedMissionsRaw);
+          const filtered = cloudMissions.filter(
+            (m) => !deletedSet.includes(m.title) && !deletedSet.includes(m.id)
+          );
+          const toPrune = cloudMissions.filter(
+            (m) => deletedSet.includes(m.title) || deletedSet.includes(m.id)
+          );
+          for (const pm of toPrune) {
+            supabaseService.deleteMission(userId, pm.id, pm.title).catch(() => {});
+          }
+          cloudMissions = filtered;
+        }
+      } catch {}
+      setMissions(cloudMissions);
+
+      let cloudHabits = data.habits || [];
+      try {
+        const deletedHabitsRaw = localStorage.getItem('web_ascend_deleted_habits');
+        if (deletedHabitsRaw) {
+          const deletedSet: string[] = JSON.parse(deletedHabitsRaw);
+          const filtered = cloudHabits.filter(
+            (h) => !deletedSet.includes(h.name) && !deletedSet.includes(h.id)
+          );
+          const toPrune = cloudHabits.filter(
+            (h) => deletedSet.includes(h.name) || deletedSet.includes(h.id)
+          );
+          for (const ph of toPrune) {
+            supabaseService.deleteHabit(userId, ph.id, ph.name).catch(() => {});
+          }
+          cloudHabits = filtered;
+        }
+      } catch {}
+      setHabits(cloudHabits);
 
       // Merge daily records for today to protect in-flight and active toggles from being overwritten
       setDailyRecords((prev) => {
@@ -1212,7 +1254,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (id: string) => {
       soundFX.playBlip();
       const target = missions.find((m) => m.id === id);
-      setMissions((prev) => prev.filter((m) => m.id !== id));
+      const nextMissions = missions.filter((m) => m.id !== id);
+      setMissions(nextMissions);
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.MISSIONS, JSON.stringify(nextMissions));
+        localStorage.setItem('web_ascend_missions_initialized', 'true');
+        const deletedSetRaw = localStorage.getItem('web_ascend_deleted_missions');
+        const deletedSet: string[] = deletedSetRaw ? JSON.parse(deletedSetRaw) : [];
+        if (target?.title && !deletedSet.includes(target.title)) {
+          deletedSet.push(target.title);
+        }
+        if (id && !deletedSet.includes(id)) {
+          deletedSet.push(id);
+        }
+        localStorage.setItem('web_ascend_deleted_missions', JSON.stringify(deletedSet));
+      } catch (storageErr) {
+        console.warn('Error updating mission localStorage on delete:', storageErr);
+      }
+
       setDailyRecords((prev) => {
         const todayRec = prev[todayDate];
         if (!todayRec || !todayRec.completedMissionIds.includes(id)) return prev;
@@ -1229,7 +1289,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (user) {
         try {
-          await supabaseService.deleteMission(user.id, id);
+          await supabaseService.deleteMission(user.id, id, target?.title);
         } catch (err) {
           console.error('Error deleting mission from cloud:', err);
         }
@@ -1242,6 +1302,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createHabit = useCallback(
     async (data: Omit<Habit, 'id' | 'createdAt' | 'currentStreak' | 'longestStreak'>) => {
       soundFX.playBlip();
+      // Remove name from deleted tombstones if re-created
+      try {
+        const deletedSetRaw = localStorage.getItem('web_ascend_deleted_habits');
+        if (deletedSetRaw) {
+          const deletedSet: string[] = JSON.parse(deletedSetRaw);
+          const filtered = deletedSet.filter((item) => item !== data.name);
+          localStorage.setItem('web_ascend_deleted_habits', JSON.stringify(filtered));
+        }
+      } catch {}
       if (user) {
         setSyncStatus('SYNCING');
         try {
@@ -1307,7 +1376,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (id: string) => {
       soundFX.playBlip();
       const target = habits.find((h) => h.id === id);
-      setHabits((prev) => prev.filter((h) => h.id !== id));
+      const nextHabits = habits.filter((h) => h.id !== id);
+      setHabits(nextHabits);
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(nextHabits));
+        localStorage.setItem('web_ascend_habits_initialized', 'true');
+        const deletedSetRaw = localStorage.getItem('web_ascend_deleted_habits');
+        const deletedSet: string[] = deletedSetRaw ? JSON.parse(deletedSetRaw) : [];
+        if (target?.name && !deletedSet.includes(target.name)) {
+          deletedSet.push(target.name);
+        }
+        if (id && !deletedSet.includes(id)) {
+          deletedSet.push(id);
+        }
+        localStorage.setItem('web_ascend_deleted_habits', JSON.stringify(deletedSet));
+      } catch (storageErr) {
+        console.warn('Error updating habit localStorage on delete:', storageErr);
+      }
+
       setDailyRecords((prev) => {
         const todayRec = prev[todayDate];
         if (!todayRec || !todayRec.completedHabitIds.includes(id)) return prev;
@@ -1324,7 +1411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (user) {
         try {
-          await supabaseService.deleteHabit(user.id, id);
+          await supabaseService.deleteHabit(user.id, id, target?.name);
         } catch (err) {
           console.error('Error deleting habit from cloud:', err);
         }
@@ -1665,6 +1752,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(cleanRewards));
       localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify([]));
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cleanNotifs));
+      localStorage.removeItem('web_ascend_deleted_habits');
+      localStorage.removeItem('web_ascend_deleted_missions');
+      localStorage.setItem('web_ascend_habits_initialized', 'true');
+      localStorage.setItem('web_ascend_missions_initialized', 'true');
     } catch (e) {
       console.warn('LocalStorage wipe warning:', e);
     }

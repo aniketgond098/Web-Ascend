@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Edit2,
   Trash2,
+  Bot,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MissionModal } from '../modals/MissionModal';
@@ -27,6 +28,7 @@ import { Mission, Habit } from '../../types';
 import { SpideyCoinIcon } from '../ui/SpideyCoinDisplay';
 import { WebStreakVisualizer } from '../ui/WebStreakVisualizer';
 import { SpiderIcon } from '../ui/SpiderIcon';
+import { WebbyAvatar } from '../ui/WebbyAvatar';
 
 export const TodayView: React.FC = () => {
   const {
@@ -249,6 +251,36 @@ export const TodayView: React.FC = () => {
               +{potentialCoins} SPIDEY COINS
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* WEBBY AI COMPANION BANNER */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-[#0C152B]/90 via-[#0A0E17]/95 to-[#120D1A]/90 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono shadow-[0_0_20px_rgba(34,211,238,0.08)]">
+        <div className="flex items-center gap-3">
+          <WebbyAvatar size="sm" state="idle" showBadge={true} />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-cyan-300 font-bold uppercase tracking-wider font-['Chakra_Petch']">
+                WEBBY AI ONLINE:
+              </span>
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                Live Routine Sync
+              </span>
+            </div>
+            <p className="text-slate-300 text-xs mt-0.5">
+              "Need an update on your daily schedule or what you finished today? Ask me anytime!"
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            onClick={() => setActiveTab('ASSISTANT')}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-950/80 to-blue-950/80 hover:from-cyan-900 hover:to-blue-900 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-bold font-['Chakra_Petch'] tracking-wide transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(34,211,238,0.2)]"
+          >
+            <Bot className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Chat with Webby</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import {
   User,
   ShieldCheck,
   Lock,
+  Bot,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { WebAscendLogo } from '../ui/WebAscendLogo';
@@ -205,6 +206,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               <span>CLOUD AUTH</span>
             </button>
           )}
+
+          {/* Webby AI Quick Launch */}
+          <button
+            onClick={() => setActiveTab('ASSISTANT')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 hover:border-cyan-400 text-cyan-300 transition-all font-mono text-xs shadow-[0_0_10px_rgba(34,211,238,0.15)] cursor-pointer"
+            title="Open Webby AI Companion"
+          >
+            <Bot className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline font-bold">WEBBY</span>
+          </button>
 
           {/* Audio Button */}
           <button

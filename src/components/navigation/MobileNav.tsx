@@ -7,6 +7,7 @@ import {
   Sparkles,
   TrendingUp,
   User,
+  Bot,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ActiveTab } from '../../types';
@@ -16,6 +17,7 @@ export const MobileNav: React.FC = () => {
 
   const navItems: { id: ActiveTab; label: string; icon: React.FC<{ className?: string }> }[] = [
     { id: 'TODAY', label: 'HUB', icon: Compass },
+    { id: 'ASSISTANT', label: 'WEBBY', icon: Bot },
     { id: 'MISSIONS', label: 'MISSIONS', icon: Target },
     { id: 'HABITS', label: 'PROTOCOLS', icon: CheckSquare },
     { id: 'TRACKING', label: 'LOG', icon: Calendar },

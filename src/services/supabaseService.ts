@@ -305,55 +305,6 @@ export const supabaseService = {
     const purchasesRows = purchasesResult.data;
     const notifRows = notifResult.data;
 
-    // If cloud missions are empty, seed starter missions to database
-    if (missionsRows.length === 0) {
-      try {
-        const missionsToInsert = STARTER_MISSIONS.map((m) => ({
-          user_id: userId,
-          title: m.title,
-          description: m.description,
-          priority: m.priority,
-          xp_reward: m.xpReward,
-          spidey_coin_reward: m.essenceReward,
-          required: m.isRequired,
-          active: m.isActive,
-        }));
-        const { data: insertedMissions } = await supabase
-          .from('missions')
-          .insert(missionsToInsert)
-          .select('*');
-        if (insertedMissions && insertedMissions.length > 0) {
-          missionsRows = insertedMissions;
-        }
-      } catch (err) {
-        console.warn('Auto-seed missions notice:', err);
-      }
-    }
-
-    // If cloud habits are empty, seed starter habits to database
-    if (habitsRows.length === 0) {
-      try {
-        const habitsToInsert = STARTER_HABITS.map((h) => ({
-          user_id: userId,
-          name: h.name,
-          description: h.description,
-          frequency: 'DAILY',
-          xp_reward: h.xpReward,
-          spidey_coin_reward: h.essenceReward,
-          active: h.isActive,
-        }));
-        const { data: insertedHabits } = await supabase
-          .from('habits')
-          .insert(habitsToInsert)
-          .select('*');
-        if (insertedHabits && insertedHabits.length > 0) {
-          habitsRows = insertedHabits;
-        }
-      } catch (err) {
-        console.warn('Auto-seed habits notice:', err);
-      }
-    }
-
     // Transform Missions (missions are single-day tasks)
     const missions: Mission[] = missionsRows.map((m) => {
       const createdAtDate = m.created_at ? new Date(m.created_at) : new Date();
@@ -1231,15 +1182,37 @@ export const supabaseService = {
     if (error) console.warn('updateMission error:', error);
   },
 
-  async deleteMission(userId: string, id: string): Promise<void> {
-    if (!isUUID(id)) return;
+  async deleteMission(userId: string, id: string, missionTitle?: string): Promise<void> {
     try {
-      await supabase.from('mission_completions').delete().eq('mission_id', id).eq('user_id', userId);
+      let targetId = isUUID(id) ? id : null;
+
+      if (!targetId && missionTitle) {
+        const { data: matched } = await supabase
+          .from('missions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('title', missionTitle);
+        if (matched && matched.length > 0) {
+          for (const m of matched) {
+            await supabase.from('mission_completions').delete().eq('mission_id', m.id).eq('user_id', userId);
+            await supabase.from('missions').delete().eq('id', m.id).eq('user_id', userId);
+          }
+          return;
+        }
+      }
+
+      if (targetId) {
+        await supabase.from('mission_completions').delete().eq('mission_id', targetId).eq('user_id', userId);
+        const { error } = await supabase.from('missions').delete().eq('id', targetId).eq('user_id', userId);
+        if (error) console.warn('deleteMission error:', error);
+      }
+
+      if (missionTitle) {
+        await supabase.from('missions').delete().eq('user_id', userId).eq('title', missionTitle);
+      }
     } catch (e) {
-      console.warn('mission_completions cleanup notice:', e);
+      console.warn('deleteMission error:', e);
     }
-    const { error } = await supabase.from('missions').delete().eq('id', id).eq('user_id', userId);
-    if (error) console.warn('deleteMission error:', error);
   },
 
   /**
@@ -1288,15 +1261,37 @@ export const supabaseService = {
     if (error) console.warn('updateHabit error:', error);
   },
 
-  async deleteHabit(userId: string, id: string): Promise<void> {
-    if (!isUUID(id)) return;
+  async deleteHabit(userId: string, id: string, habitName?: string): Promise<void> {
     try {
-      await supabase.from('habit_completions').delete().eq('habit_id', id).eq('user_id', userId);
+      let targetId = isUUID(id) ? id : null;
+
+      if (!targetId && habitName) {
+        const { data: matched } = await supabase
+          .from('habits')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('name', habitName);
+        if (matched && matched.length > 0) {
+          for (const m of matched) {
+            await supabase.from('habit_completions').delete().eq('habit_id', m.id).eq('user_id', userId);
+            await supabase.from('habits').delete().eq('id', m.id).eq('user_id', userId);
+          }
+          return;
+        }
+      }
+
+      if (targetId) {
+        await supabase.from('habit_completions').delete().eq('habit_id', targetId).eq('user_id', userId);
+        const { error } = await supabase.from('habits').delete().eq('id', targetId).eq('user_id', userId);
+        if (error) console.warn('deleteHabit error:', error);
+      }
+
+      if (habitName) {
+        await supabase.from('habits').delete().eq('user_id', userId).eq('name', habitName);
+      }
     } catch (e) {
-      console.warn('habit_completions cleanup notice:', e);
+      console.warn('deleteHabit error:', e);
     }
-    const { error } = await supabase.from('habits').delete().eq('id', id).eq('user_id', userId);
-    if (error) console.warn('deleteHabit error:', error);
   },
 
   /**

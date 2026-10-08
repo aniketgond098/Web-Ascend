@@ -118,4 +118,11 @@ export interface AppNotification {
   read: boolean;
 }
 
-export type ActiveTab = 'TODAY' | 'MISSIONS' | 'HABITS' | 'TRACKING' | 'REWARDS' | 'ASCEND' | 'PROFILE';
+export interface AssistantMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+}
+
+export type ActiveTab = 'TODAY' | 'MISSIONS' | 'HABITS' | 'TRACKING' | 'REWARDS' | 'ASCEND' | 'PROFILE' | 'ASSISTANT';

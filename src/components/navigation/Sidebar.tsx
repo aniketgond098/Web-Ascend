@@ -10,6 +10,7 @@ import {
   Shield,
   Volume2,
   VolumeX,
+  Bot,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ActiveTab } from '../../types';
@@ -26,6 +27,7 @@ export const Sidebar: React.FC = () => {
     badge?: string;
   }[] = [
     { id: 'TODAY', label: 'WEB HUB', glyph: '◉', icon: Compass },
+    { id: 'ASSISTANT', label: 'WEBBY AI', glyph: '🕷', icon: Bot, badge: 'AI' },
     { id: 'MISSIONS', label: 'MISSIONS', glyph: '🎯', icon: Target },
     { id: 'HABITS', label: 'DAILY PROTOCOLS', glyph: '✓', icon: CheckSquare },
     { id: 'TRACKING', label: 'MISSION LOG', glyph: '◷', icon: Calendar },
@@ -35,15 +37,15 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 bg-[#0A0E17] border-r border-blue-900/20 min-h-screen justify-between sticky top-0 h-screen select-none z-30">
+    <aside className="hidden lg:flex flex-col w-64 bg-[#0A0E17] border-r border-blue-900/20 fixed top-0 bottom-0 left-0 h-screen h-[100dvh] justify-between select-none z-30 shrink-0">
       {/* Top Header & Logo */}
-      <div>
-        <div className="p-8 pb-6 flex items-center">
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="p-8 pb-6 flex items-center shrink-0">
           <WebAscendLogo size="md" showText={true} />
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 space-y-1 font-['Chakra_Petch']">
+        <nav className="flex-1 px-4 space-y-1 font-['Chakra_Petch'] overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -79,7 +81,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Bottom User ID Block & Audio Toggle */}
-      <div className="p-6 mt-auto border-t border-blue-900/10 flex flex-col gap-3">
+      <div className="p-6 mt-auto border-t border-blue-900/10 flex flex-col gap-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-950/80 to-[#0A0E17] border border-red-500/50 flex items-center justify-center font-bold text-xs text-red-400 shrink-0 shadow-[0_0_10px_rgba(239,68,68,0.2)] font-['Chakra_Petch']">

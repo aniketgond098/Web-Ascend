@@ -15,6 +15,8 @@ import { TrackingView } from './components/views/TrackingView';
 import { RewardsView } from './components/views/RewardsView';
 import { AscendView } from './components/views/AscendView';
 import { ProfileView } from './components/views/ProfileView';
+import { WebbyAssistantView } from './components/views/WebbyAssistantView';
+import { WebbyFloatingWidget } from './components/ui/WebbyFloatingWidget';
 
 // Modals
 import { CelebrationModals } from './components/modals/CelebrationModals';
@@ -85,23 +87,25 @@ const MainLayout: React.FC = () => {
         return <AscendView />;
       case 'PROFILE':
         return <ProfileView />;
+      case 'ASSISTANT':
+        return <WebbyAssistantView />;
       default:
         return <TodayView />;
     }
   };
 
   return (
-    <div className="relative min-h-screen bg-[#05070A] text-slate-300 flex flex-col selection:bg-red-600 selection:text-white font-sans antialiased overflow-x-hidden">
+    <div className="relative h-screen h-[100dvh] bg-[#05070A] text-slate-300 flex flex-col selection:bg-red-600 selection:text-white font-sans antialiased overflow-hidden">
       {/* Dynamic Cybernetic Spider Web Geometry Background */}
       <WebBackground />
 
       {/* Main Container Layout */}
-      <div className="relative z-10 flex min-h-screen w-full">
-        {/* Desktop Sidebar (Left) */}
+      <div className="relative z-10 flex h-full w-full overflow-hidden">
+        {/* Desktop Sidebar (Left - Fixed) */}
         <Sidebar />
 
-        {/* Content Area (Right) */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Content Area (Right - Only Section Scrollable) */}
+        <div className="flex-1 flex flex-col min-w-0 lg:ml-64 h-full overflow-y-auto overflow-x-hidden">
           {/* Top HUD Header */}
           <Header />
 
@@ -142,7 +146,7 @@ const MainLayout: React.FC = () => {
           )}
 
           {/* View Container with Transitions */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-8">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -166,6 +170,9 @@ const MainLayout: React.FC = () => {
 
       {/* Mobile Bottom Navigation Bar */}
       <MobileNav />
+
+      {/* Persistent Webby AI Floating Companion */}
+      <WebbyFloatingWidget />
 
       {/* Global Modals & Celebrations */}
       <CelebrationModals />
